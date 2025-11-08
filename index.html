@@ -27,7 +27,6 @@
       touch-action: pan-x pan-y pinch-zoom;
     }
 
-    /* Інші стилі залишаються незмінними */
     #langToggle {
       position: fixed;
       top: 12px;
@@ -163,7 +162,6 @@
       display: none;
     }
 
-    /* Додаємо відлагоджувальну інформацію */
     #debugInfo {
       position: fixed;
       top: 60px;
@@ -203,12 +201,16 @@
 
   <input type="file" id="fileInput" accept="image/png" style="display:none" />
 
-  <!-- PoseNet замість BodyPix -->
+  <!-- ВИПРАВЛЕНО: без зайвих пробілів -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet@2.2.2"></script>
 
   <script>
-    // === Мови ===
+    // Виправлення витоку пам'яті WebGL
+    if (typeof tf !== 'undefined') {
+      tf.ENV.set('WEBGL_DELETE_TEXTURE_THRESHOLD', Infinity);
+    }
+
     const LANGUAGES = {
       en: {
         title: "Tattoo Try-On AR",
@@ -260,10 +262,8 @@
     let net = null;
     let debugMode = false;
 
-    // === Конфіг ===
     const TATTOO_NAMES = ["skull", "rose"];
 
-    // PoseNet використовує інші назви ключових точок!
     const BODY_PARTS = [
       { name: "Left Shoulder", keypoint: "leftShoulder", posenetKey: "leftShoulder", type: "point" },
       { name: "Right Shoulder", keypoint: "rightShoulder", posenetKey: "rightShoulder", type: "point" },
@@ -285,14 +285,13 @@
     let tattooAngle = 0;
     let isDragging = false;
     let dragOffsetX = 0, dragOffsetY = 0;
-    let selectedBodyPart = BODY_PARTS[4]; // Left Wrist за замовчуванням
+    let selectedBodyPart = BODY_PARTS[4];
     let activeTouches = {};
     let manualMode = false;
     let initialDistance = 0;
     let initialScale = 0.3;
     let lastPose = null;
 
-    // === DOM ===
     const video = document.getElementById("video");
     const overlayCanvas = document.getElementById("overlayCanvas");
     const ctx = overlayCanvas.getContext("2d");
@@ -444,7 +443,6 @@
       if (!currentTattoo) return;
       ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
       
-      // Малюємо татуювання
       const w = overlayCanvas.width * tattooScale;
       const h = (currentTattoo.height / currentTattoo.width) * w;
       ctx.save();
@@ -453,7 +451,6 @@
       ctx.drawImage(currentTattoo, -w / 2, -h / 2, w, h);
       ctx.restore();
 
-      // Додаємо відлагоджувальну інформацію
       if (debugMode && lastPose) {
         drawDebugInfo();
       }
@@ -465,7 +462,6 @@
       ctx.fillStyle = 'lime';
       ctx.lineWidth = 2;
       
-      // Малюємо всі ключові точки
       Object.values(lastPose).forEach(kp => {
         if (kp && kp.score > 0.3) {
           ctx.beginPath();
@@ -474,7 +470,6 @@
         }
       });
       
-      // Підсвічуємо вибрану точку
       const selectedKp = lastPose[selectedBodyPart.posenetKey];
       if (selectedKp && selectedKp.score > 0.3) {
         ctx.strokeStyle = 'gold';
@@ -482,8 +477,6 @@
         ctx.beginPath();
         ctx.arc(selectedKp.x, selectedKp.y, 10, 0, Math.PI * 2);
         ctx.stroke();
-        
-        // Текст з назвою частини тіла
         ctx.fillStyle = 'gold';
         ctx.font = '14px Arial';
         ctx.fillText(selectedBodyPart.name, selectedKp.x + 15, selectedKp.y - 10);
@@ -502,9 +495,7 @@
         });
 
         if (pose && pose.keypoints) {
-          // Конвертуємо ключові точки PoseNet в зручний формат
           const keypointMap = {};
-          
           pose.keypoints.forEach(kp => {
             keypointMap[kp.part] = {
               x: kp.position.x,
@@ -512,7 +503,6 @@
               score: kp.score
             };
           });
-
           lastPose = keypointMap;
           attachTattooToBody(keypointMap);
         } else {
@@ -531,17 +521,15 @@
       if (!currentTattoo || manualMode) return;
       
       const part = selectedBodyPart;
-      const kp = keypoints[part.posenetKey]; // Використовуємо правильну назву для PoseNet
+      const kp = keypoints[part.posenetKey];
       
-      if (kp && kp.score > 0.3) { // Знижуємо поріг для кращого трекінгу
+      if (kp && kp.score > 0.3) {
         const x = kp.x / overlayCanvas.width;
         const y = kp.y / overlayCanvas.height;
         
-        // Плавна інтерполяція
         tattooX = 0.8 * tattooX + 0.2 * x;
         tattooY = 0.8 * tattooY + 0.2 * y;
         
-        // Автоматичне масштабування на основі розміру тіла
         if (keypoints.leftShoulder && keypoints.rightShoulder && 
             keypoints.leftShoulder.score > 0.3 && keypoints.rightShoulder.score > 0.3) {
           const shoulderWidth = Math.abs(keypoints.leftShoulder.x - keypoints.rightShoulder.x);
@@ -553,7 +541,6 @@
       }
     }
 
-    // Інші функції залишаються незмінними
     uploadBtn.onclick = () => fileInput.click();
     fileInput.onchange = (e) => {
       const file = e.target.files[0];
@@ -587,7 +574,6 @@
       link.click();
     };
 
-    // Обробка торкань залишається незмінною
     overlayCanvas.addEventListener("touchstart", (e) => {
       if (!currentTattoo) return;
       e.preventDefault();
@@ -675,14 +661,18 @@
       }
     });
 
-    // === Ініціалізація PoseNet ===
     async function initPose() {
       try {
+        // Перевірка наявності бібліотек
+        if (typeof posenet === 'undefined') {
+          throw new Error('PoseNet library failed to load');
+        }
+        
         loading.innerHTML = "🔄 Loading pose detection model...";
         net = await posenet.load({
           architecture: 'MobileNetV1',
           outputStride: 16,
-          inputResolution: 257,
+          inputResolution: { width: 640, height: 480 }, // Оптимізовано для камери
           multiplier: 0.75
         });
         console.log("PoseNet model loaded successfully");
@@ -719,7 +709,6 @@
       }
     }
 
-    // === Старт ===
     async function initializeApp() {
       try {
         buildTattooPicker();
