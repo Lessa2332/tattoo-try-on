@@ -1,84 +1,123 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="uk">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Tattoo Try-On AR</title>
+  <title>AR Примірка татуювань</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    :root {
+      --primary-bg: rgba(15, 15, 20, 0.85);
+      --accent-gold: #FFD700;
+      --accent-red: #FF4757;
+      --text-light: #FFFFFF;
+      --text-muted: #A0A0A0;
+      --panel-radius: 24px;
+    }
+    
     body {
-      background: #000;
+      background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      color: white;
+      color: var(--text-light);
       touch-action: none;
       -webkit-text-size-adjust: 100%;
     }
+    
     #video, #overlayCanvas {
       position: absolute;
       top: 0; left: 0;
       width: 100%; height: 100%;
       object-fit: cover;
     }
-    #video { z-index: 1; }
+    
+    #video { 
+      z-index: 1; 
+      transform: scaleX(-1);
+    }
+    
     #overlayCanvas { 
       z-index: 2; 
       pointer-events: auto;
       touch-action: pan-x pan-y pinch-zoom;
     }
 
+    /* Кнопка перемикача мови */
     #langToggle {
       position: fixed;
-      top: 12px;
-      right: 12px;
+      top: 16px;
+      right: 16px;
       z-index: 100;
-      background: rgba(0,0,0,0.6);
-      color: white;
-      border: none;
-      width: 36px;
-      height: 36px;
+      background: var(--primary-bg);
+      color: var(--text-light);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       font-weight: bold;
       cursor: pointer;
-      backdrop-filter: blur(10px);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s ease;
+    }
+    
+    #langToggle:active {
+      transform: scale(0.95);
     }
 
+    /* Панель вибору частин тіла */
     #bodyPartPanel {
       position: fixed;
       bottom: 160px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 12px;
+      gap: 10px;
       z-index: 100;
-      background: rgba(0,0,0,0.6);
-      padding: 10px;
-      border-radius: 20px;
-      backdrop-filter: blur(10px);
+      background: var(--primary-bg);
+      padding: 12px;
+      border-radius: var(--panel-radius);
+      backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
       max-width: 90vw;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
     }
-    #bodyPartPanel::-webkit-scrollbar { display: none; }
+    
+    #bodyPartPanel::-webkit-scrollbar { 
+      display: none; 
+    }
 
     .body-part-btn {
-      padding: 8px 12px;
-      background: rgba(255,255,255,0.2);
-      border: 2px solid white;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+      border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 16px;
-      color: white;
+      color: var(--text-light);
       font-size: 13px;
+      font-weight: 600;
       cursor: pointer;
       white-space: nowrap;
-      min-width: 80px;
+      min-width: 85px;
       text-align: center;
+      transition: all 0.3s ease;
     }
+    
+    .body-part-btn:active {
+      transform: scale(0.95);
+    }
+    
     .body-part-btn.active {
-      background: gold;
+      background: linear-gradient(135deg, var(--accent-gold), #FFA500);
       color: #000;
       font-weight: bold;
+      box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+      border-color: var(--accent-gold);
     }
 
+    /* Головна панель кнопок */
     .panel {
       position: fixed;
       bottom: 20px;
@@ -87,28 +126,57 @@
       display: flex;
       gap: 12px;
       z-index: 100;
-      background: rgba(0,0,0,0.6);
-      padding: 12px;
-      border-radius: 24px;
-      backdrop-filter: blur(10px);
+      background: var(--primary-bg);
+      padding: 14px;
+      border-radius: var(--panel-radius);
+      backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
       max-width: 90vw;
       overflow-x: auto;
     }
-    .panel::-webkit-scrollbar { display: none; }
-
-    .btn {
-      padding: 12px 16px;
-      background: rgba(255,255,255,0.2);
-      border: 2px solid white;
-      border-radius: 20px;
-      color: white;
-      font-size: 15px;
-      cursor: pointer;
-      white-space: nowrap;
-      min-width: 100px;
-      text-align: center;
+    
+    .panel::-webkit-scrollbar { 
+      display: none; 
     }
 
+    .btn {
+      padding: 14px 18px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      color: var(--text-light);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      min-width: 110px;
+      text-align: center;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 0; 
+      left: -100%;
+      width: 100%; 
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+      transition: left 0.5s;
+    }
+    
+    .btn:active::before {
+      left: 100%;
+    }
+    
+    .btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Панель вибору татуювань */
     #tattooPicker {
       position: fixed;
       bottom: 90px;
@@ -117,100 +185,223 @@
       display: flex;
       gap: 12px;
       z-index: 100;
-      background: rgba(0,0,0,0.6);
-      padding: 10px;
-      border-radius: 20px;
-      backdrop-filter: blur(10px);
+      background: var(--primary-bg);
+      padding: 12px;
+      border-radius: var(--panel-radius);
+      backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
       max-width: 90vw;
       overflow-x: auto;
     }
-    #tattooPicker::-webkit-scrollbar { display: none; }
+    
+    #tattooPicker::-webkit-scrollbar { 
+      display: none; 
+    }
 
     .tattoo-thumb {
-      width: 60px; height: 60px;
-      border: 2px solid white;
-      border-radius: 12px;
+      width: 65px; 
+      height: 65px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 14px;
       background: white;
       cursor: pointer;
       object-fit: contain;
+      transition: all 0.3s ease;
     }
+    
+    .tattoo-thumb:active {
+      transform: scale(0.95);
+    }
+    
     .tattoo-thumb.selected { 
-      border-color: gold; 
-      box-shadow: 0 0 0 2px gold;
+      border-color: var(--accent-gold); 
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+      transform: scale(1.05);
     }
 
+    /* Індикатори та завантаження */
     #loading {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: #000; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; z-index: 999;
-      color: white; font-size: 18px;
+      position: fixed; 
+      top: 0; 
+      left: 0; 
+      width: 100%; 
+      height: 100%;
+      background: #000; 
+      display: flex; 
+      flex-direction: column;
+      align-items: center; 
+      justify-content: center; 
+      z-index: 999;
+      color: var(--text-light); 
+      font-size: 18px;
       padding: 20px;
       text-align: center;
     }
-    #loading p { margin-top: 16px; font-size: 14px; color: #aaa; }
+    
+    #loading p { 
+      margin-top: 16px; 
+      font-size: 14px; 
+      color: var(--text-muted); 
+    }
 
     #manualIndicator {
       position: fixed;
-      top: 12px;
-      left: 12px;
-      background: rgba(255,0,0,0.7);
+      top: 16px;
+      left: 16px;
+      background: rgba(255, 71, 87, 0.8);
       color: white;
-      padding: 4px 8px;
-      border-radius: 12px;
+      padding: 8px 12px;
+      border-radius: 16px;
       font-size: 12px;
+      font-weight: 600;
       z-index: 100;
       display: none;
+      backdrop-filter: blur(10px);
     }
 
     #debugInfo {
       position: fixed;
-      top: 60px;
-      left: 12px;
-      background: rgba(0,0,0,0.8);
+      top: 70px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.8);
       color: lime;
-      padding: 8px;
-      border-radius: 8px;
+      padding: 10px;
+      border-radius: 12px;
       font-size: 12px;
       z-index: 100;
       display: none;
       max-width: 300px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 255, 0, 0.3);
+    }
+
+    /* Адаптивність для мобільних */
+    @media (max-width: 768px) {
+      .panel {
+        bottom: 12px;
+        padding: 12px;
+        border-radius: 20px;
+        gap: 8px;
+      }
+      
+      .btn {
+        padding: 12px 14px;
+        font-size: 14px;
+        min-width: 90px;
+        border-radius: 16px;
+      }
+      
+      #bodyPartPanel {
+        bottom: 140px;
+        padding: 10px;
+        border-radius: 20px;
+        gap: 8px;
+      }
+      
+      .body-part-btn {
+        padding: 8px 12px;
+        font-size: 12px;
+        min-width: 75px;
+        border-radius: 14px;
+      }
+      
+      #tattooPicker {
+        bottom: 80px;
+        padding: 10px;
+        border-radius: 20px;
+        gap: 10px;
+      }
+      
+      .tattoo-thumb {
+        width: 55px; 
+        height: 55px;
+        border-radius: 12px;
+      }
+      
+      #langToggle {
+        width: 40px; 
+        height: 40px;
+        font-size: 14px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .panel {
+        flex-wrap: wrap;
+        justify-content: center;
+        max-width: 95vw;
+        bottom: 8px;
+      }
+      
+      #bodyPartPanel {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        max-width: 95vw;
+        bottom: 130px;
+      }
+      
+      .btn {
+        font-size: 13px;
+        padding: 10px 12px;
+        min-width: 80px;
+      }
+      
+      #tattooPicker {
+        bottom: 70px;
+        max-width: 95vw;
+      }
+      
+      .tattoo-thumb {
+        width: 50px; 
+        height: 50px;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .btn {
+        min-width: 70px;
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+      
+      .body-part-btn {
+        min-width: 65px;
+        font-size: 11px;
+        padding: 6px 8px;
+      }
     }
   </style>
 </head>
 <body>
   <div id="loading">
-    🔍 Loading camera and pose detection...<br>
-    <p>Please allow camera access</p>
+    🔍 Завантаження камери та трекінгу...
+    <p>Будь ласка, дозволь доступ до камери</p>
   </div>
 
   <video id="video" playsinline muted></video>
   <canvas id="overlayCanvas"></canvas>
 
-  <button id="langToggle">🇺🇦</button>
-  <div id="manualIndicator">Manual Mode</div>
+  <button id="langToggle">🇬🇧</button>
+  <div id="manualIndicator">Ручний режим</div>
   <div id="debugInfo"></div>
 
   <div id="tattooPicker"></div>
   <div id="bodyPartPanel"></div>
 
   <div class="panel">
-    <button id="captureBtn" class="btn">📸 Capture</button>
-    <button id="uploadBtn" class="btn">➕ Upload PNG</button>
-    <button id="debugToggle" class="btn">🐛 Debug</button>
+    <button id="captureBtn" class="btn">📸 Зробити фото</button>
+    <button id="uploadBtn" class="btn">➕ Завантажити PNG</button>
+    <button id="debugToggle" class="btn">🐛 Дебаг</button>
   </div>
 
   <input type="file" id="fileInput" accept="image/png" style="display:none" />
 
-  <!-- ВИПРАВЛЕНО: без зайвих пробілів -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet@2.2.2"></script>
 
   <script>
-    // Виправлення витоку пам'яті WebGL
-    if (typeof tf !== 'undefined') {
-      tf.ENV.set('WEBGL_DELETE_TEXTURE_THRESHOLD', Infinity);
-    }
-
+    // === Мови ===
     const LANGUAGES = {
       en: {
         title: "Tattoo Try-On AR",
@@ -231,7 +422,9 @@
           "Left Knee": "Left Knee",
           "Right Knee": "Right Knee",
           "Left Ankle": "Left Ankle",
-          "Right Ankle": "Right Ankle"
+          "Right Ankle": "Right Ankle",
+          "Chest": "Chest",
+          "Back": "Back"
         }
       },
       uk: {
@@ -253,31 +446,162 @@
           "Left Knee": "Ліве коліно",
           "Right Knee": "Праве коліно",
           "Left Ankle": "Ліва щиколотка",
-          "Right Ankle": "Права щиколотка"
+          "Right Ankle": "Права щиколотка",
+          "Chest": "Груди",
+          "Back": "Спина"
         }
       }
     };
 
-    let currentLang = 'en';
+    let currentLang = 'uk';
     let net = null;
     let debugMode = false;
 
-    const TATTOO_NAMES = ["skull", "rose"];
-
+    // === Розширена конфігурація частин тіла ===
     const BODY_PARTS = [
-      { name: "Left Shoulder", keypoint: "leftShoulder", posenetKey: "leftShoulder", type: "point" },
-      { name: "Right Shoulder", keypoint: "rightShoulder", posenetKey: "rightShoulder", type: "point" },
-      { name: "Left Elbow", keypoint: "leftElbow", posenetKey: "leftElbow", type: "point" },
-      { name: "Right Elbow", keypoint: "rightElbow", posenetKey: "rightElbow", type: "point" },
-      { name: "Left Wrist", keypoint: "leftWrist", posenetKey: "leftWrist", type: "point" },
-      { name: "Right Wrist", keypoint: "rightWrist", posenetKey: "rightWrist", type: "point" },
-      { name: "Left Hip", keypoint: "leftHip", posenetKey: "leftHip", type: "point" },
-      { name: "Right Hip", keypoint: "rightHip", posenetKey: "rightHip", type: "point" },
-      { name: "Left Knee", keypoint: "leftKnee", posenetKey: "leftKnee", type: "point" },
-      { name: "Right Knee", keypoint: "rightKnee", posenetKey: "rightKnee", type: "point" },
-      { name: "Left Ankle", keypoint: "leftAnkle", posenetKey: "leftAnkle", type: "point" },
-      { name: "Right Ankle", keypoint: "rightAnkle", posenetKey: "rightAnkle", type: "point" }
+      { 
+        name: "Left Shoulder", 
+        keypoint: "leftShoulder", 
+        posenetKey: "leftShoulder", 
+        type: "area",
+        defaultScale: 0.4,
+        rotation: 0,
+        offsetX: 0,
+        offsetY: -0.1
+      },
+      { 
+        name: "Right Shoulder", 
+        keypoint: "rightShoulder", 
+        posenetKey: "rightShoulder", 
+        type: "area",
+        defaultScale: 0.4,
+        rotation: 0,
+        offsetX: 0,
+        offsetY: -0.1
+      },
+      { 
+        name: "Left Elbow", 
+        keypoint: "leftElbow", 
+        posenetKey: "leftElbow", 
+        type: "point",
+        defaultScale: 0.3,
+        rotation: Math.PI/4,
+        offsetX: 0.05,
+        offsetY: 0
+      },
+      { 
+        name: "Right Elbow", 
+        keypoint: "rightElbow", 
+        posenetKey: "rightElbow", 
+        type: "point",
+        defaultScale: 0.3,
+        rotation: -Math.PI/4,
+        offsetX: -0.05,
+        offsetY: 0
+      },
+      { 
+        name: "Left Wrist", 
+        keypoint: "leftWrist", 
+        posenetKey: "leftWrist", 
+        type: "point",
+        defaultScale: 0.25,
+        rotation: Math.PI/2,
+        offsetX: 0.08,
+        offsetY: 0
+      },
+      { 
+        name: "Right Wrist", 
+        keypoint: "rightWrist", 
+        posenetKey: "rightWrist", 
+        type: "point",
+        defaultScale: 0.25,
+        rotation: -Math.PI/2,
+        offsetX: -0.08,
+        offsetY: 0
+      },
+      { 
+        name: "Left Hip", 
+        keypoint: "leftHip", 
+        posenetKey: "leftHip", 
+        type: "area",
+        defaultScale: 0.35,
+        rotation: 0,
+        offsetX: 0.03,
+        offsetY: -0.05
+      },
+      { 
+        name: "Right Hip", 
+        keypoint: "rightHip", 
+        posenetKey: "rightHip", 
+        type: "area",
+        defaultScale: 0.35,
+        rotation: 0,
+        offsetX: -0.03,
+        offsetY: -0.05
+      },
+      { 
+        name: "Left Knee", 
+        keypoint: "leftKnee", 
+        posenetKey: "leftKnee", 
+        type: "point",
+        defaultScale: 0.3,
+        rotation: Math.PI/6,
+        offsetX: 0.05,
+        offsetY: 0
+      },
+      { 
+        name: "Right Knee", 
+        keypoint: "rightKnee", 
+        posenetKey: "rightKnee", 
+        type: "point",
+        defaultScale: 0.3,
+        rotation: -Math.PI/6,
+        offsetX: -0.05,
+        offsetY: 0
+      },
+      { 
+        name: "Left Ankle", 
+        keypoint: "leftAnkle", 
+        posenetKey: "leftAnkle", 
+        type: "point",
+        defaultScale: 0.25,
+        rotation: Math.PI/3,
+        offsetX: 0.05,
+        offsetY: 0.02
+      },
+      { 
+        name: "Right Ankle", 
+        keypoint: "rightAnkle", 
+        posenetKey: "rightAnkle", 
+        type: "point",
+        defaultScale: 0.25,
+        rotation: -Math.PI/3,
+        offsetX: -0.05,
+        offsetY: 0.02
+      },
+      { 
+        name: "Chest", 
+        keypoint: "chest", 
+        posenetKey: null,
+        type: "area",
+        defaultScale: 0.5,
+        rotation: 0,
+        offsetX: 0,
+        offsetY: 0
+      },
+      { 
+        name: "Back", 
+        keypoint: "back", 
+        posenetKey: null,
+        type: "area", 
+        defaultScale: 0.6,
+        rotation: 0,
+        offsetX: 0,
+        offsetY: 0
+      }
     ];
+
+    const TATTOO_NAMES = ["skull", "rose", "dragon", "tribal"];
 
     let currentTattoo = null;
     let tattooX = 0.5, tattooY = 0.5;
@@ -285,13 +609,14 @@
     let tattooAngle = 0;
     let isDragging = false;
     let dragOffsetX = 0, dragOffsetY = 0;
-    let selectedBodyPart = BODY_PARTS[4];
+    let selectedBodyPart = BODY_PARTS[4]; // Left Wrist за замовчуванням
     let activeTouches = {};
     let manualMode = false;
     let initialDistance = 0;
     let initialScale = 0.3;
     let lastPose = null;
 
+    // === DOM ===
     const video = document.getElementById("video");
     const overlayCanvas = document.getElementById("overlayCanvas");
     const ctx = overlayCanvas.getContext("2d");
@@ -306,6 +631,7 @@
     const debugInfo = document.getElementById("debugInfo");
     const debugToggle = document.getElementById("debugToggle");
 
+    // === Функції мов ===
     function setLanguage(lang) {
       currentLang = lang;
       document.documentElement.lang = lang;
@@ -315,7 +641,7 @@
       document.getElementById('uploadBtn').textContent = LANGUAGES[lang].upload;
       document.getElementById('debugToggle').textContent = LANGUAGES[lang].debug;
       document.getElementById('manualIndicator').textContent = LANGUAGES[lang].manualMode;
-      document.getElementById('langToggle').textContent = lang === 'en' ? '🇺🇦' : '🇬🇧';
+      document.getElementById('langToggle').textContent = lang === 'uk' ? '🇬🇧' : '🇺🇦';
       buildBodyPartSelector();
     }
 
@@ -332,28 +658,29 @@
       debugInfo.style.display = 'block';
       let debugText = `Tattoo: ${tattooX.toFixed(2)}, ${tattooY.toFixed(2)}<br>`;
       debugText += `Scale: ${tattooScale.toFixed(2)}<br>`;
+      debugText += `Angle: ${tattooAngle.toFixed(2)}<br>`;
       debugText += `Manual: ${manualMode}<br>`;
       
       if (lastPose) {
         const part = selectedBodyPart;
-        const kp = lastPose[part.posenetKey];
         debugText += `Selected: ${part.name}<br>`;
-        debugText += `Keypoint: ${kp ? `x:${kp.x}, y:${kp.y}, score:${kp.score.toFixed(2)}` : 'NOT FOUND'}`;
+        
+        if (part.posenetKey && lastPose[part.posenetKey]) {
+          const kp = lastPose[part.posenetKey];
+          debugText += `Keypoint: x:${kp.x.toFixed(0)}, y:${kp.y.toFixed(0)}, score:${kp.score.toFixed(2)}`;
+        } else if (part.keypoint === 'chest' || part.keypoint === 'back') {
+          debugText += `Calculated position`;
+        }
       }
       
       debugInfo.innerHTML = debugText;
     }
 
-    langToggle.onclick = () => {
+    function triggerHapticFeedback() {
       if (navigator.vibrate) navigator.vibrate(10);
-      setLanguage(currentLang === 'en' ? 'uk' : 'en');
-    };
+    }
 
-    debugToggle.onclick = () => {
-      debugMode = !debugMode;
-      updateDebugInfo();
-    };
-
+    // === Ініціалізація інтерфейсу ===
     function resizeCanvas() {
       overlayCanvas.width = video.videoWidth || window.innerWidth;
       overlayCanvas.height = video.videoHeight || window.innerHeight;
@@ -367,6 +694,7 @@
         img.className = "tattoo-thumb";
         img.src = `tattoos/${name}.png`;
         img.onclick = () => {
+          triggerHapticFeedback();
           loadTattooImage(`tattoos/${name}.png`);
           document.querySelectorAll('.tattoo-thumb').forEach(t => t.classList.remove('selected'));
           img.classList.add('selected');
@@ -401,15 +729,17 @@
       canvas.height = 200;
       const ctx = canvas.getContext('2d');
       
-      ctx.fillStyle = 'white';
-      ctx.beginPath();
-      ctx.arc(100, 100, 80, 0, Math.PI * 2);
-      ctx.fill();
-      
-      ctx.fillStyle = 'black';
+      // Створюємо просте татуювання-заглушку
+      ctx.fillStyle = '#FFD700';
       ctx.beginPath();
       ctx.arc(100, 100, 60, 0, Math.PI * 2);
       ctx.fill();
+      
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 24px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('TAT', 100, 100);
       
       const img = new Image();
       img.onload = () => {
@@ -428,29 +758,37 @@
         btn.className = "body-part-btn";
         btn.textContent = LANGUAGES[currentLang].bodyParts[part.name] || part.name;
         btn.onclick = () => {
+          triggerHapticFeedback();
           selectedBodyPart = part;
           manualMode = false;
           updateManualIndicator();
           document.querySelectorAll('.body-part-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
+          redrawTattoo();
         };
         if (part === selectedBodyPart) btn.classList.add('active');
         bodyPartPanel.appendChild(btn);
       });
     }
 
+    // === Відображення татуювання ===
     function redrawTattoo() {
       if (!currentTattoo) return;
+      
       ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
       
+      // Малюємо татуювання
       const w = overlayCanvas.width * tattooScale;
       const h = (currentTattoo.height / currentTattoo.width) * w;
+      
       ctx.save();
       ctx.translate(overlayCanvas.width * tattooX, overlayCanvas.height * tattooY);
       ctx.rotate(tattooAngle);
+      ctx.globalAlpha = 0.9;
       ctx.drawImage(currentTattoo, -w / 2, -h / 2, w, h);
       ctx.restore();
 
+      // Додаємо відлагоджувальну інформацію
       if (debugMode && lastPose) {
         drawDebugInfo();
       }
@@ -461,30 +799,34 @@
       ctx.strokeStyle = 'lime';
       ctx.fillStyle = 'lime';
       ctx.lineWidth = 2;
+      ctx.font = '12px Arial';
       
+      // Малюємо всі ключові точки
       Object.values(lastPose).forEach(kp => {
-        if (kp && kp.score > 0.3) {
+        if (kp && kp.score > 0.2) {
           ctx.beginPath();
-          ctx.arc(kp.x, kp.y, 5, 0, Math.PI * 2);
+          ctx.arc(kp.x, kp.y, 4, 0, Math.PI * 2);
           ctx.fill();
         }
       });
       
-      const selectedKp = lastPose[selectedBodyPart.posenetKey];
-      if (selectedKp && selectedKp.score > 0.3) {
+      // Підсвічуємо вибрану точку
+      const selectedKp = selectedBodyPart.posenetKey ? lastPose[selectedBodyPart.posenetKey] : null;
+      if (selectedKp && selectedKp.score > 0.2) {
         ctx.strokeStyle = 'gold';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(selectedKp.x, selectedKp.y, 10, 0, Math.PI * 2);
+        ctx.arc(selectedKp.x, selectedKp.y, 12, 0, Math.PI * 2);
         ctx.stroke();
+        
         ctx.fillStyle = 'gold';
-        ctx.font = '14px Arial';
         ctx.fillText(selectedBodyPart.name, selectedKp.x + 15, selectedKp.y - 10);
       }
       
       ctx.restore();
     }
 
+    // === PoseNet детекція ===
     async function detectPose() {
       if (!net || manualMode) return;
       
@@ -503,6 +845,7 @@
               score: kp.score
             };
           });
+
           lastPose = keypointMap;
           attachTattooToBody(keypointMap);
         } else {
@@ -521,27 +864,84 @@
       if (!currentTattoo || manualMode) return;
       
       const part = selectedBodyPart;
-      const kp = keypoints[part.posenetKey];
+      let targetX, targetY, scale, rotation;
       
-      if (kp && kp.score > 0.3) {
-        const x = kp.x / overlayCanvas.width;
-        const y = kp.y / overlayCanvas.height;
+      // Спеціальна логіка для розрахункових точок
+      if (part.keypoint === "chest") {
+        const leftShoulder = keypoints.leftShoulder;
+        const rightShoulder = keypoints.rightShoulder;
         
-        tattooX = 0.8 * tattooX + 0.2 * x;
-        tattooY = 0.8 * tattooY + 0.2 * y;
-        
-        if (keypoints.leftShoulder && keypoints.rightShoulder && 
-            keypoints.leftShoulder.score > 0.3 && keypoints.rightShoulder.score > 0.3) {
-          const shoulderWidth = Math.abs(keypoints.leftShoulder.x - keypoints.rightShoulder.x);
-          const newScale = Math.max(0.15, Math.min(0.8, shoulderWidth / overlayCanvas.width * 2.0));
-          tattooScale = 0.9 * tattooScale + 0.1 * newScale;
+        if (leftShoulder && rightShoulder && 
+            leftShoulder.score > 0.2 && rightShoulder.score > 0.2) {
+          targetX = (leftShoulder.x + rightShoulder.x) / 2;
+          targetY = (leftShoulder.y + rightShoulder.y) / 2 + 40;
+          scale = Math.abs(leftShoulder.x - rightShoulder.x) / overlayCanvas.width * 1.8;
+          rotation = 0;
         }
+      } else if (part.keypoint === "back") {
+        const leftShoulder = keypoints.leftShoulder;
+        const rightShoulder = keypoints.rightShoulder;
+        const leftHip = keypoints.leftHip;
+        const rightHip = keypoints.rightHip;
+        
+        if (leftShoulder && rightShoulder && leftHip && rightHip &&
+            leftShoulder.score > 0.2 && rightShoulder.score > 0.2 &&
+            leftHip.score > 0.2 && rightHip.score > 0.2) {
+          targetX = (leftShoulder.x + rightShoulder.x + leftHip.x + rightHip.x) / 4;
+          targetY = (leftShoulder.y + rightShoulder.y + leftHip.y + rightHip.y) / 4;
+          scale = Math.max(
+            Math.abs(leftShoulder.x - rightShoulder.x),
+            Math.abs(leftHip.x - rightHip.x)
+          ) / overlayCanvas.width * 1.5;
+          rotation = 0;
+        }
+      } else {
+        // Стандартна логіка для інших точок
+        const kp = keypoints[part.posenetKey];
+        if (!kp || kp.score <= 0.2) return;
+        
+        targetX = kp.x + (part.offsetX * overlayCanvas.width);
+        targetY = kp.y + (part.offsetY * overlayCanvas.height);
+        scale = part.defaultScale;
+        rotation = part.rotation;
+        
+        // Динамічне масштабування
+        if (keypoints.leftShoulder && keypoints.rightShoulder && 
+            keypoints.leftShoulder.score > 0.2 && keypoints.rightShoulder.score > 0.2) {
+          const shoulderWidth = Math.abs(keypoints.leftShoulder.x - keypoints.rightShoulder.x);
+          scale = Math.max(0.15, Math.min(1.0, shoulderWidth / overlayCanvas.width * 2.2));
+        }
+      }
+      
+      if (targetX && targetY) {
+        const smoothFactor = 0.2;
+        tattooX = (1 - smoothFactor) * tattooX + smoothFactor * (targetX / overlayCanvas.width);
+        tattooY = (1 - smoothFactor) * tattooY + smoothFactor * (targetY / overlayCanvas.height);
+        tattooScale = (1 - smoothFactor) * tattooScale + smoothFactor * scale;
+        tattooAngle = (1 - smoothFactor) * tattooAngle + smoothFactor * rotation;
         
         redrawTattoo();
       }
     }
 
-    uploadBtn.onclick = () => fileInput.click();
+    // === Обробники подій ===
+    langToggle.onclick = () => {
+      triggerHapticFeedback();
+      setLanguage(currentLang === 'uk' ? 'en' : 'uk');
+    };
+
+    debugToggle.onclick = () => {
+      triggerHapticFeedback();
+      debugMode = !debugMode;
+      updateDebugInfo();
+      redrawTattoo();
+    };
+
+    uploadBtn.onclick = () => {
+      triggerHapticFeedback();
+      fileInput.click();
+    };
+
     fileInput.onchange = (e) => {
       const file = e.target.files[0];
       if (file && file.type === "image/png") {
@@ -554,26 +954,38 @@
     };
 
     captureBtn.onclick = () => {
+      triggerHapticFeedback();
       const captureCanvas = document.createElement("canvas");
       captureCanvas.width = overlayCanvas.width;
       captureCanvas.height = overlayCanvas.height;
       const cctx = captureCanvas.getContext("2d");
+      
+      // Малюємо відео (дзеркально)
+      cctx.save();
+      cctx.translate(captureCanvas.width, 0);
+      cctx.scale(-1, 1);
       cctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+      cctx.restore();
+      
+      // Малюємо татуювання
       if (currentTattoo) {
         const w = captureCanvas.width * tattooScale;
         const h = (currentTattoo.height / currentTattoo.width) * w;
         cctx.save();
         cctx.translate(captureCanvas.width * tattooX, captureCanvas.height * tattooY);
         cctx.rotate(tattooAngle);
+        cctx.globalAlpha = 0.9;
         cctx.drawImage(currentTattoo, -w / 2, -h / 2, w, h);
         cctx.restore();
       }
+      
       const link = document.createElement("a");
       link.download = "tattoo-preview.png";
       link.href = captureCanvas.toDataURL("image/png");
       link.click();
     };
 
+    // === Обробка торкань ===
     overlayCanvas.addEventListener("touchstart", (e) => {
       if (!currentTattoo) return;
       e.preventDefault();
@@ -604,6 +1016,7 @@
           dragOffsetY = touchY - overlayCanvas.height * tattooY;
           manualMode = true;
           updateManualIndicator();
+          triggerHapticFeedback();
         }
       } else if (touches.length === 2) {
         const t1 = touches[0];
@@ -614,6 +1027,7 @@
         initialScale = tattooScale;
         manualMode = true;
         updateManualIndicator();
+        triggerHapticFeedback();
       }
     });
 
@@ -643,7 +1057,7 @@
         
         if (initialDistance > 0) {
           const scaleFactor = currentDistance / initialDistance;
-          tattooScale = Math.max(0.1, Math.min(1.0, initialScale * scaleFactor));
+          tattooScale = Math.max(0.1, Math.min(2.0, initialScale * scaleFactor));
           redrawTattoo();
         }
       }
@@ -661,18 +1075,14 @@
       }
     });
 
+    // === Ініціалізація PoseNet ===
     async function initPose() {
       try {
-        // Перевірка наявності бібліотек
-        if (typeof posenet === 'undefined') {
-          throw new Error('PoseNet library failed to load');
-        }
-        
-        loading.innerHTML = "🔄 Loading pose detection model...";
+        loading.innerHTML = "🔄 Завантаження моделі трекінгу...";
         net = await posenet.load({
           architecture: 'MobileNetV1',
           outputStride: 16,
-          inputResolution: { width: 640, height: 480 }, // Оптимізовано для камери
+          inputResolution: 257,
           multiplier: 0.75
         });
         console.log("PoseNet model loaded successfully");
@@ -709,11 +1119,12 @@
       }
     }
 
+    // === Старт додатку ===
     async function initializeApp() {
       try {
         buildTattooPicker();
         buildBodyPartSelector();
-        setLanguage('en');
+        setLanguage('uk');
         
         await initPose();
         await setupCamera();
@@ -726,6 +1137,37 @@
         loading.innerHTML = errorMsg;
       }
     }
+    
+    // Автозбереження стану
+    function saveAppState() {
+      const state = {
+        selectedBodyPart: selectedBodyPart.keypoint,
+        tattooScale,
+        tattooAngle,
+        manualMode,
+        currentLang
+      };
+      localStorage.setItem('tattooAppState', JSON.stringify(state));
+    }
+
+    function loadAppState() {
+      const saved = localStorage.getItem('tattooAppState');
+      if (saved) {
+        const state = JSON.parse(saved);
+        const savedPart = BODY_PARTS.find(p => p.keypoint === state.selectedBodyPart);
+        if (savedPart) selectedBodyPart = savedPart;
+        tattooScale = state.tattooScale || tattooScale;
+        tattooAngle = state.tattooAngle || tattooAngle;
+        manualMode = state.manualMode || manualMode;
+        setLanguage(state.currentLang || 'uk');
+      }
+    }
+
+    // Завантажуємо стан при старті
+    loadAppState();
+    
+    // Зберігаємо стан при виході
+    window.addEventListener('beforeunload', saveAppState);
     
     initializeApp();
   </script>
