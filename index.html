@@ -596,17 +596,18 @@
     const TATTOO_NAMES = ["rose", "skull"];
 
     let currentTattoo = null;
-    let tattooX = 0.5, tattooY = 0.5;
+    let tattooX = 0.5, tattooY = 0.5; // Початкові координати по центру
     let tattooScale = 0.3;
     let tattooAngle = 0;
     let isDragging = false;
     let dragOffsetX = 0, dragOffsetY = 0;
     let selectedBodyPart = BODY_PARTS[5]; // leftWrist за замовчуванням
     let activeTouches = {};
-    let manualMode = false;
+    let manualMode = true; // Спочатку ручний режим, поки не виявимо позу
     let initialDistance = 0;
     let initialScale = 0.3;
     let lastPose = null;
+    let isInitialized = false;
 
     // === DOM ===
     const video = document.getElementById("video");
@@ -652,6 +653,7 @@
       debugText += `Scale: ${tattooScale.toFixed(2)}<br>`;
       debugText += `Angle: ${tattooAngle.toFixed(2)}<br>`;
       debugText += `Manual: ${manualMode}<br>`;
+      debugText += `Initialized: ${isInitialized}<br>`;
       
       if (lastPose) {
         const part = selectedBodyPart;
@@ -676,6 +678,12 @@
     function resizeCanvas() {
       overlayCanvas.width = video.videoWidth || window.innerWidth;
       overlayCanvas.height = video.videoHeight || window.innerHeight;
+      
+      // Після ресайзу перемальовуємо татуювання по центру
+      if (!isInitialized) {
+        tattooX = 0.5;
+        tattooY = 0.5;
+      }
       redrawTattoo();
     }
 
@@ -706,8 +714,11 @@
       img.crossOrigin = "anonymous";
       img.onload = () => {
         currentTattoo = img;
-        manualMode = false;
-        updateManualIndicator();
+        // При завантаженні нового татуювання залишаємо його по центру
+        if (!isInitialized) {
+          tattooX = 0.5;
+          tattooY = 0.5;
+        }
         redrawTattoo();
       };
       img.onerror = () => {
@@ -738,8 +749,8 @@
       const img = new Image();
       img.onload = () => {
         currentTattoo = img;
-        manualMode = false;
-        updateManualIndicator();
+        tattooX = 0.5;
+        tattooY = 0.5;
         redrawTattoo();
       };
       img.src = canvas.toDataURL();
@@ -754,6 +765,7 @@
         btn.onclick = () => {
           triggerHapticFeedback();
           selectedBodyPart = part;
+          // При зміні частини тіла переходимо в автоматичний режим
           manualMode = false;
           updateManualIndicator();
           document.querySelectorAll('.body-part-btn').forEach(b => b.classList.remove('active'));
@@ -793,7 +805,7 @@
       ctx.strokeStyle = 'lime';
       ctx.fillStyle = 'lime';
       ctx.lineWidth = 2;
-      ctx.font = '12px Arial';
+      ctx.font = '10px Arial';
       
       // Малюємо всі ключові точки
       Object.entries(lastPose).forEach(([key, kp]) => {
@@ -817,6 +829,7 @@
         ctx.stroke();
         
         ctx.fillStyle = 'gold';
+        ctx.font = '12px Arial';
         ctx.fillText(selectedBodyPart.name, selectedKp.x + 20, selectedKp.y - 12);
       }
       
@@ -825,7 +838,7 @@
 
     // === PoseNet детекція ===
     async function detectPose() {
-      if (!net || manualMode) return;
+      if (!net) return;
       
       try {
         const pose = await net.estimateSinglePose(video, {
@@ -844,7 +857,16 @@
           });
 
           lastPose = keypointMap;
-          attachTattooToBody(keypointMap);
+          
+          // Якщо знайшли позу і не в ручному режимі - прикріплюємо татуювання
+          if (!manualMode) {
+            attachTattooToBody(keypointMap);
+          }
+          
+          if (!isInitialized) {
+            isInitialized = true;
+            console.log("Pose detection initialized successfully");
+          }
         } else {
           lastPose = null;
         }
@@ -863,9 +885,11 @@
       const part = selectedBodyPart;
       const kp = keypoints[part.posenetKey];
       
-      if (kp && kp.score > 0.3) { // Збільшимо поріг для кращої точності
-        const targetX = kp.x + (part.offsetX * overlayCanvas.width);
-        const targetY = kp.y + (part.offsetY * overlayCanvas.height);
+      if (kp && kp.score > 0.3) {
+        // Коректне перетворення координат
+        const targetX = kp.x / overlayCanvas.width;
+        const targetY = kp.y / overlayCanvas.height;
+        
         let scale = part.defaultScale;
         const rotation = part.rotation;
         
@@ -877,9 +901,9 @@
         }
         
         // Плавна інтерполяція
-        const smoothFactor = 0.3; // Збільшимо для більш плавного руху
-        tattooX = (1 - smoothFactor) * tattooX + smoothFactor * (targetX / overlayCanvas.width);
-        tattooY = (1 - smoothFactor) * tattooY + smoothFactor * (targetY / overlayCanvas.height);
+        const smoothFactor = 0.3;
+        tattooX = (1 - smoothFactor) * tattooX + smoothFactor * targetX;
+        tattooY = (1 - smoothFactor) * tattooY + smoothFactor * targetY;
         tattooScale = (1 - smoothFactor) * tattooScale + smoothFactor * scale;
         tattooAngle = (1 - smoothFactor) * tattooAngle + smoothFactor * rotation;
         
@@ -1088,9 +1112,15 @@
         buildTattooPicker();
         buildBodyPartSelector();
         setLanguage('uk');
+        updateManualIndicator(); // Оновлюємо індикатор ручного режиму
         
         await initPose();
         await setupCamera();
+        
+        // Спочатку показуємо татуювання по центру
+        redrawTattoo();
+        
+        // Запускаємо детекцію пози
         detectPose();
       } catch (err) {
         console.error("Init error:", err);
