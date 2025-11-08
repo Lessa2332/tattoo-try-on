@@ -12,24 +12,22 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       color: white;
       touch-action: none;
+      -webkit-text-size-adjust: 100%;
     }
-    #video {
+    #video, #overlayCanvas {
       position: absolute;
       top: 0; left: 0;
       width: 100%; height: 100%;
       object-fit: cover;
-      z-index: 1;
     }
-    #overlayCanvas {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: 2;
-      /* ВАЖЛИВО: дозволяємо події дотику на canvas */
+    #video { z-index: 1; }
+    #overlayCanvas { 
+      z-index: 2; 
       pointer-events: auto;
-      touch-action: none;
+      touch-action: pan-x pan-y pinch-zoom;
     }
 
+    /* Інші стилі залишаються незмінними */
     #langToggle {
       position: fixed;
       top: 12px;
@@ -97,6 +95,7 @@
       max-width: 90vw;
       overflow-x: auto;
     }
+    .panel::-webkit-scrollbar { display: none; }
 
     .btn {
       padding: 12px 16px;
@@ -126,6 +125,7 @@
       max-width: 90vw;
       overflow-x: auto;
     }
+    #tattooPicker::-webkit-scrollbar { display: none; }
 
     .tattoo-thumb {
       width: 60px; height: 60px;
@@ -149,6 +149,19 @@
       text-align: center;
     }
     #loading p { margin-top: 16px; font-size: 14px; color: #aaa; }
+
+    #manualIndicator {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: rgba(255,0,0,0.7);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      z-index: 100;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -161,6 +174,7 @@
   <canvas id="overlayCanvas"></canvas>
 
   <button id="langToggle">🇺🇦</button>
+  <div id="manualIndicator">Manual Mode</div>
 
   <div id="tattooPicker"></div>
   <div id="bodyPartPanel"></div>
@@ -172,16 +186,21 @@
 
   <input type="file" id="fileInput" accept="image/png" style="display:none" />
 
-  <script type="module">
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.0.5"></script>
+
+  <script>
+    // === Мови ===
     const LANGUAGES = {
       en: {
         title: "Tattoo Try-On AR",
         loading: "🔍 Loading camera and pose detection...<br><p>Please allow camera access</p>",
         capture: "📸 Capture",
         upload: "➕ Upload PNG",
+        manualMode: "Manual Mode",
         bodyParts: {
           "Left Shoulder": "Left Shoulder",
-          "Right Shoulder": "Right Shoulder",
+          "Right Shoulder": "Right Shoulder", 
           "Left Elbow": "Left Elbow",
           "Right Elbow": "Right Elbow",
           "Left Wrist": "Left Wrist",
@@ -199,6 +218,7 @@
         loading: "🔍 Завантаження камери та трекінгу...<br><p>Будь ласка, дозволь доступ до камери</p>",
         capture: "📸 Зробити фото",
         upload: "➕ Завантажити PNG",
+        manualMode: "Ручний режим",
         bodyParts: {
           "Left Shoulder": "Ліве плече",
           "Right Shoulder": "Праве плече",
@@ -217,31 +237,24 @@
     };
 
     let currentLang = 'en';
-    function setLanguage(lang) {
-      currentLang = lang;
-      document.documentElement.lang = lang;
-      document.title = LANGUAGES[lang].title;
-      document.getElementById('loading').innerHTML = LANGUAGES[lang].loading;
-      document.getElementById('captureBtn').textContent = LANGUAGES[lang].capture;
-      document.getElementById('uploadBtn').textContent = LANGUAGES[lang].upload;
-      document.getElementById('langToggle').textContent = lang === 'en' ? '🇺🇦' : '🇬🇧';
-      buildBodyPartSelector();
-    }
+    let net = null;
 
+    // === Конфіг ===
     const TATTOO_NAMES = ["skull", "rose"];
+
     const BODY_PARTS = [
-      { name: "Left Shoulder", idx: 11, type: "point" },
-      { name: "Right Shoulder", idx: 12, type: "point" },
-      { name: "Left Elbow", idx: 13, type: "vector", end: 15 },
-      { name: "Right Elbow", idx: 14, type: "vector", end: 16 },
-      { name: "Left Wrist", idx: 15, type: "vector", end: 19 },
-      { name: "Right Wrist", idx: 16, type: "vector", end: 20 },
-      { name: "Left Hip", idx: 23, type: "point" },
-      { name: "Right Hip", idx: 24, type: "point" },
-      { name: "Left Knee", idx: 25, type: "vector", end: 27 },
-      { name: "Right Knee", idx: 26, type: "vector", end: 28 },
-      { name: "Left Ankle", idx: 27, type: "vector", end: 31 },
-      { name: "Right Ankle", idx: 28, type: "vector", end: 32 }
+      { name: "Left Shoulder", keypoint: "leftShoulder", type: "point" },
+      { name: "Right Shoulder", keypoint: "rightShoulder", type: "point" },
+      { name: "Left Elbow", keypoint: "leftElbow", type: "point" },
+      { name: "Right Elbow", keypoint: "rightElbow", type: "point" },
+      { name: "Left Wrist", keypoint: "leftWrist", type: "point" },
+      { name: "Right Wrist", keypoint: "rightWrist", type: "point" },
+      { name: "Left Hip", keypoint: "leftHip", type: "point" },
+      { name: "Right Hip", keypoint: "rightHip", type: "point" },
+      { name: "Left Knee", keypoint: "leftKnee", type: "point" },
+      { name: "Right Knee", keypoint: "rightKnee", type: "point" },
+      { name: "Left Ankle", keypoint: "leftAnkle", type: "point" },
+      { name: "Right Ankle", keypoint: "rightAnkle", type: "point" }
     ];
 
     let currentTattoo = null;
@@ -253,7 +266,10 @@
     let selectedBodyPart = BODY_PARTS[4];
     let activeTouches = {};
     let manualMode = false;
+    let initialDistance = 0;
+    let initialScale = 0.3;
 
+    // === DOM ===
     const video = document.getElementById("video");
     const overlayCanvas = document.getElementById("overlayCanvas");
     const ctx = overlayCanvas.getContext("2d");
@@ -264,8 +280,28 @@
     const fileInput = document.getElementById("fileInput");
     const bodyPartPanel = document.getElementById("bodyPartPanel");
     const langToggle = document.getElementById("langToggle");
+    const manualIndicator = document.getElementById("manualIndicator");
 
-    langToggle.onclick = () => setLanguage(currentLang === 'en' ? 'uk' : 'en');
+    function setLanguage(lang) {
+      currentLang = lang;
+      document.documentElement.lang = lang;
+      document.title = LANGUAGES[lang].title;
+      document.getElementById('loading').innerHTML = LANGUAGES[lang].loading;
+      document.getElementById('captureBtn').textContent = LANGUAGES[lang].capture;
+      document.getElementById('uploadBtn').textContent = LANGUAGES[lang].upload;
+      document.getElementById('manualIndicator').textContent = LANGUAGES[lang].manualMode;
+      document.getElementById('langToggle').textContent = lang === 'en' ? '🇺🇦' : '🇬🇧';
+      buildBodyPartSelector();
+    }
+
+    function updateManualIndicator() {
+      manualIndicator.style.display = manualMode ? 'block' : 'none';
+    }
+
+    langToggle.onclick = () => {
+      if (navigator.vibrate) navigator.vibrate(10);
+      setLanguage(currentLang === 'en' ? 'uk' : 'en');
+    };
 
     function resizeCanvas() {
       overlayCanvas.width = video.videoWidth || window.innerWidth;
@@ -298,9 +334,40 @@
       img.onload = () => {
         currentTattoo = img;
         manualMode = false;
+        updateManualIndicator();
         redrawTattoo();
       };
+      img.onerror = () => {
+        console.error("Failed to load tattoo:", src);
+        createFallbackTattoo();
+      };
       img.src = src;
+    }
+
+    function createFallbackTattoo() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 200;
+      canvas.height = 200;
+      const ctx = canvas.getContext('2d');
+      
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(100, 100, 80, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.fillStyle = 'black';
+      ctx.beginPath();
+      ctx.arc(100, 100, 60, 0, Math.PI * 2);
+      ctx.fill();
+      
+      const img = new Image();
+      img.onload = () => {
+        currentTattoo = img;
+        manualMode = false;
+        updateManualIndicator();
+        redrawTattoo();
+      };
+      img.src = canvas.toDataURL();
     }
 
     function buildBodyPartSelector() {
@@ -312,6 +379,7 @@
         btn.onclick = () => {
           selectedBodyPart = part;
           manualMode = false;
+          updateManualIndicator();
           document.querySelectorAll('.body-part-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
         };
@@ -332,35 +400,60 @@
       ctx.restore();
     }
 
-    function attachTattooToBody(landmarks) {
-      if (!landmarks || !currentTattoo || manualMode) return;
-      const part = selectedBodyPart;
-      if (part.type === "point") {
-        const pt = landmarks[part.idx];
-        if (pt && pt.visibility > 0.6) {
-          tattooX = 0.7 * tattooX + 0.3 * pt.x;
-          tattooY = 0.7 * tattooY + 0.3 * pt.y;
-          redrawTattoo();
+    async function detectPose() {
+      if (!net || manualMode) return;
+      
+      try {
+        const poses = await net.estimatePoses(video, {
+          flipHorizontal: false,
+          maxDetections: 1,
+          scoreThreshold: 0.5,
+          nmsRadius: 20
+        });
+
+        if (poses.length > 0) {
+          const pose = poses[0];
+          const keypoints = pose.keypoints;
+          const keypointMap = {};
+          
+          keypoints.forEach(kp => {
+            keypointMap[kp.name] = kp;
+          });
+
+          attachTattooToBody(keypointMap);
         }
-      } else if (part.type === "vector") {
-        const start = landmarks[part.idx];
-        const end = landmarks[part.end];
-        if (!start || !end || start.visibility < 0.5 || end.visibility < 0.5) return;
-        const mx = (start.x + end.x) / 2;
-        const my = (start.y + end.y) / 2;
-        const dx = end.x - start.x;
-        const dy = end.y - start.y;
-        const angle = Math.atan2(dy, dx);
-        const dist = Math.hypot(dx, dy);
-        const newScale = Math.max(0.1, Math.min(0.8, dist * 2.5));
-        tattooX = 0.7 * tattooX + 0.3 * mx;
-        tattooY = 0.7 * tattooY + 0.3 * my;
-        tattooScale = 0.7 * tattooScale + 0.3 * newScale;
-        tattooAngle = 0.7 * tattooAngle + 0.3 * angle;
+      } catch (error) {
+        console.error("Pose detection error:", error);
+      }
+      
+      requestAnimationFrame(detectPose);
+    }
+
+    function attachTattooToBody(keypoints) {
+      if (!currentTattoo || manualMode) return;
+      
+      const part = selectedBodyPart;
+      const kp = keypoints[part.keypoint];
+      
+      if (kp && kp.score > 0.5) {
+        const x = kp.x / overlayCanvas.width;
+        const y = kp.y / overlayCanvas.height;
+        
+        tattooX = 0.7 * tattooX + 0.3 * x;
+        tattooY = 0.7 * tattooY + 0.3 * y;
+        
+        // Автоматичне масштабування на основі розміру тіла
+        if (keypoints.leftShoulder && keypoints.rightShoulder) {
+          const shoulderWidth = Math.abs(keypoints.leftShoulder.x - keypoints.rightShoulder.x);
+          const newScale = Math.max(0.2, Math.min(0.6, shoulderWidth / overlayCanvas.width * 1.5));
+          tattooScale = 0.8 * tattooScale + 0.2 * newScale;
+        }
+        
         redrawTattoo();
       }
     }
 
+    // Інші функції залишаються незмінними
     uploadBtn.onclick = () => fileInput.click();
     fileInput.onchange = (e) => {
       const file = e.target.files[0];
@@ -369,6 +462,7 @@
         loadTattooImage(url);
         document.querySelectorAll('.tattoo-thumb').forEach(t => t.classList.remove('selected'));
         manualMode = true;
+        updateManualIndicator();
       }
     };
 
@@ -393,27 +487,47 @@
       link.click();
     };
 
-    // === ВАЖЛИВО: canvas тепер реагує на події ===
+    // Обробка торкань залишається незмінною
     overlayCanvas.addEventListener("touchstart", (e) => {
       if (!currentTattoo) return;
       e.preventDefault();
       const touches = e.touches;
+      
       for (let i = 0; i < touches.length; i++) {
-        activeTouches[touches[i].identifier] = { x: touches[i].clientX, y: touches[i].clientY };
+        activeTouches[touches[i].identifier] = { 
+          x: touches[i].clientX, 
+          y: touches[i].clientY 
+        };
       }
+
       if (touches.length === 1) {
         const rect = overlayCanvas.getBoundingClientRect();
-        const xOnCanvas = (touches[0].clientX - rect.left) / rect.width;
-        const yOnCanvas = (touches[0].clientY - rect.top) / rect.height;
+        const touchX = touches[0].clientX;
+        const touchY = touches[0].clientY;
+        
+        const xOnCanvas = (touchX - rect.left) / rect.width;
+        const yOnCanvas = (touchY - rect.top) / rect.height;
+        
         const dx = xOnCanvas - tattooX;
         const dy = yOnCanvas - tattooY;
-        // Розширюємо зону захоплення
-        if (Math.hypot(dx, dy) < tattooScale * 2) {
+        const distanceFromCenter = Math.hypot(dx, dy);
+        
+        if (distanceFromCenter < tattooScale * 0.8) {
           isDragging = true;
-          dragOffsetX = touches[0].clientX - overlayCanvas.width * tattooX;
-          dragOffsetY = touches[0].clientY - overlayCanvas.height * tattooY;
+          dragOffsetX = touchX - overlayCanvas.width * tattooX;
+          dragOffsetY = touchY - overlayCanvas.height * tattooY;
           manualMode = true;
+          updateManualIndicator();
         }
+      } else if (touches.length === 2) {
+        const t1 = touches[0];
+        const t2 = touches[1];
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        initialDistance = Math.sqrt(dx * dx + dy * dy);
+        initialScale = tattooScale;
+        manualMode = true;
+        updateManualIndicator();
       }
     });
 
@@ -421,23 +535,29 @@
       if (!currentTattoo) return;
       e.preventDefault();
       const touches = e.touches;
+      
       for (let i = 0; i < touches.length; i++) {
-        activeTouches[touches[i].identifier] = { x: touches[i].clientX, y: touches[i].clientY };
+        activeTouches[touches[i].identifier] = { 
+          x: touches[i].clientX, 
+          y: touches[i].clientY 
+        };
       }
+
       if (touches.length === 1 && isDragging) {
-        tattooX = (e.touches[0].clientX - dragOffsetX) / overlayCanvas.width;
-        tattooY = (e.touches[0].clientY - dragOffsetY) / overlayCanvas.height;
+        const touch = touches[0];
+        tattooX = (touch.clientX - dragOffsetX) / overlayCanvas.width;
+        tattooY = (touch.clientY - dragOffsetY) / overlayCanvas.height;
         redrawTattoo();
       } else if (touches.length === 2) {
-        const t1 = activeTouches[e.touches[0].identifier];
-        const t2 = activeTouches[e.touches[1].identifier];
-        if (t1 && t2) {
-          const dx = t1.x - t2.x;
-          const dy = t1.y - t2.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          const newScale = Math.max(0.1, Math.min(1.0, distance / (overlayCanvas.width * 0.8)));
-          tattooScale = newScale;
-          manualMode = true;
+        const t1 = touches[0];
+        const t2 = touches[1];
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        const currentDistance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (initialDistance > 0) {
+          const scaleFactor = currentDistance / initialDistance;
+          tattooScale = Math.max(0.1, Math.min(1.0, initialScale * scaleFactor));
           redrawTattoo();
         }
       }
@@ -448,60 +568,77 @@
       for (let i = 0; i < e.changedTouches.length; i++) {
         delete activeTouches[e.changedTouches[i].identifier];
       }
+      
       if (e.touches.length === 0) {
         isDragging = false;
+        initialDistance = 0;
       }
     });
 
-    // === ВИПРАВЛЕНО: ВИКОРИСТОВУЄМО .task ===
-    import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12";
-
-    let poseLandmarker = null;
-
+    // === Ініціалізація BodyPix ===
     async function initPose() {
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/wasm"
-      );
-      poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-assets/pose_landmarker_lite.task"
-        },
-        runningMode: "VIDEO",
-        numPoses: 1
-      });
+      try {
+        loading.innerHTML = "🔄 Loading pose detection model...";
+        net = await bodyPix.load({
+          architecture: 'MobileNetV1',
+          outputStride: 16,
+          multiplier: 0.75,
+          quantBytes: 2
+        });
+        console.log("BodyPix model loaded successfully");
+      } catch (error) {
+        console.error("Error loading BodyPix:", error);
+        throw error;
+      }
     }
 
     async function setupCamera() {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
-      video.srcObject = stream;
-      await video.play();
-      resizeCanvas();
-      window.addEventListener("resize", resizeCanvas);
-      loading.style.display = "none";
-    }
-
-    let lastVideoTime = -1;
-    function detectPose() {
-      if (video.currentTime !== lastVideoTime && poseLandmarker) {
-        lastVideoTime = video.currentTime;
-        const results = poseLandmarker.detectForVideo(video, performance.now());
-        if (results.landmarks && results.landmarks.length > 0) {
-          attachTattooToBody(results.landmarks[0]);
-        }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: "environment",
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          }
+        });
+        video.srcObject = stream;
+        
+        await new Promise((resolve, reject) => {
+          video.onloadedmetadata = () => {
+            video.play().then(resolve).catch(reject);
+          };
+          video.onerror = reject;
+        });
+        
+        resizeCanvas();
+        window.addEventListener("resize", resizeCanvas);
+        loading.style.display = "none";
+      } catch (error) {
+        console.error("Camera error:", error);
+        throw error;
       }
-      requestAnimationFrame(detectPose);
     }
 
-    buildTattooPicker();
-    buildBodyPartSelector();
-    Promise.all([setupCamera(), initPose()])
-      .then(() => detectPose())
-      .catch(err => {
+    // === Старт ===
+    async function initializeApp() {
+      try {
+        buildTattooPicker();
+        buildBodyPartSelector();
+        setLanguage('en');
+        
+        await initPose();
+        await setupCamera();
+        detectPose();
+      } catch (err) {
         console.error("Init error:", err);
-        loading.innerHTML = "❌ Failed to start<br><small>Try Chrome/Safari on mobile</small>";
-      });
+        const errorMsg = currentLang === 'en' 
+          ? "❌ Failed to start<br><small>Try Chrome/Safari on mobile</small>"
+          : "❌ Помилка запуску<br><small>Спробуйте Chrome/Safari на мобільному</small>";
+        loading.innerHTML = errorMsg;
+      }
+    }
+    
+    initializeApp();
   </script>
 </body>
 </html>
