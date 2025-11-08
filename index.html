@@ -43,7 +43,6 @@
       touch-action: pan-x pan-y pinch-zoom;
     }
 
-    /* Кнопка перемикача мови */
     #langToggle {
       position: fixed;
       top: 16px;
@@ -66,7 +65,6 @@
       transform: scale(0.95);
     }
 
-    /* Панель вибору частин тіла */
     #bodyPartPanel {
       position: fixed;
       bottom: 160px;
@@ -117,7 +115,6 @@
       border-color: var(--accent-gold);
     }
 
-    /* Головна панель кнопок */
     .panel {
       position: fixed;
       bottom: 20px;
@@ -176,7 +173,6 @@
       transform: scale(0.95);
     }
 
-    /* Панель вибору татуювань */
     #tattooPicker {
       position: fixed;
       bottom: 90px;
@@ -220,7 +216,6 @@
       transform: scale(1.05);
     }
 
-    /* Індикатори та завантаження */
     #loading {
       position: fixed; 
       top: 0; 
@@ -422,9 +417,7 @@
           "Left Knee": "Left Knee",
           "Right Knee": "Right Knee",
           "Left Ankle": "Left Ankle",
-          "Right Ankle": "Right Ankle",
-          "Chest": "Chest",
-          "Back": "Back"
+          "Right Ankle": "Right Ankle"
         }
       },
       uk: {
@@ -446,9 +439,7 @@
           "Left Knee": "Ліве коліно",
           "Right Knee": "Праве коліно",
           "Left Ankle": "Ліва щиколотка",
-          "Right Ankle": "Права щиколотка",
-          "Chest": "Груди",
-          "Back": "Спина"
+          "Right Ankle": "Права щиколотка"
         }
       }
     };
@@ -457,7 +448,7 @@
     let net = null;
     let debugMode = false;
 
-    // === Розширена конфігурація частин тіла ===
+    // === Конфігурація частин тіла ===
     const BODY_PARTS = [
       { 
         name: "Left Shoulder", 
@@ -578,30 +569,11 @@
         rotation: -Math.PI/3,
         offsetX: -0.05,
         offsetY: 0.02
-      },
-      { 
-        name: "Chest", 
-        keypoint: "chest", 
-        posenetKey: null,
-        type: "area",
-        defaultScale: 0.5,
-        rotation: 0,
-        offsetX: 0,
-        offsetY: 0
-      },
-      { 
-        name: "Back", 
-        keypoint: "back", 
-        posenetKey: null,
-        type: "area", 
-        defaultScale: 0.6,
-        rotation: 0,
-        offsetX: 0,
-        offsetY: 0
       }
     ];
 
-    const TATTOO_NAMES = ["skull", "rose", "dragon", "tribal"];
+    // ТІЛЬКИ 2 доступні татуювання
+    const TATTOO_NAMES = ["rose", "skull"];
 
     let currentTattoo = null;
     let tattooX = 0.5, tattooY = 0.5;
@@ -668,8 +640,6 @@
         if (part.posenetKey && lastPose[part.posenetKey]) {
           const kp = lastPose[part.posenetKey];
           debugText += `Keypoint: x:${kp.x.toFixed(0)}, y:${kp.y.toFixed(0)}, score:${kp.score.toFixed(2)}`;
-        } else if (part.keypoint === 'chest' || part.keypoint === 'back') {
-          debugText += `Calculated position`;
         }
       }
       
@@ -701,6 +671,8 @@
         };
         tattooPicker.appendChild(img);
       });
+      
+      // Автоматично завантажуємо перше татуювання
       if (TATTOO_NAMES.length > 0) {
         tattooPicker.children[0]?.classList.add('selected');
         loadTattooImage(`tattoos/${TATTOO_NAMES[0]}.png`);
@@ -717,7 +689,7 @@
         redrawTattoo();
       };
       img.onerror = () => {
-        console.error("Failed to load tattoo:", src);
+        console.warn("Не вдалося завантажити татуювання:", src);
         createFallbackTattoo();
       };
       img.src = src;
@@ -864,56 +836,22 @@
       if (!currentTattoo || manualMode) return;
       
       const part = selectedBodyPart;
-      let targetX, targetY, scale, rotation;
+      const kp = keypoints[part.posenetKey];
       
-      // Спеціальна логіка для розрахункових точок
-      if (part.keypoint === "chest") {
-        const leftShoulder = keypoints.leftShoulder;
-        const rightShoulder = keypoints.rightShoulder;
+      if (kp && kp.score > 0.2) {
+        const targetX = kp.x + (part.offsetX * overlayCanvas.width);
+        const targetY = kp.y + (part.offsetY * overlayCanvas.height);
+        let scale = part.defaultScale;
+        const rotation = part.rotation;
         
-        if (leftShoulder && rightShoulder && 
-            leftShoulder.score > 0.2 && rightShoulder.score > 0.2) {
-          targetX = (leftShoulder.x + rightShoulder.x) / 2;
-          targetY = (leftShoulder.y + rightShoulder.y) / 2 + 40;
-          scale = Math.abs(leftShoulder.x - rightShoulder.x) / overlayCanvas.width * 1.8;
-          rotation = 0;
-        }
-      } else if (part.keypoint === "back") {
-        const leftShoulder = keypoints.leftShoulder;
-        const rightShoulder = keypoints.rightShoulder;
-        const leftHip = keypoints.leftHip;
-        const rightHip = keypoints.rightHip;
-        
-        if (leftShoulder && rightShoulder && leftHip && rightHip &&
-            leftShoulder.score > 0.2 && rightShoulder.score > 0.2 &&
-            leftHip.score > 0.2 && rightHip.score > 0.2) {
-          targetX = (leftShoulder.x + rightShoulder.x + leftHip.x + rightHip.x) / 4;
-          targetY = (leftShoulder.y + rightShoulder.y + leftHip.y + rightHip.y) / 4;
-          scale = Math.max(
-            Math.abs(leftShoulder.x - rightShoulder.x),
-            Math.abs(leftHip.x - rightHip.x)
-          ) / overlayCanvas.width * 1.5;
-          rotation = 0;
-        }
-      } else {
-        // Стандартна логіка для інших точок
-        const kp = keypoints[part.posenetKey];
-        if (!kp || kp.score <= 0.2) return;
-        
-        targetX = kp.x + (part.offsetX * overlayCanvas.width);
-        targetY = kp.y + (part.offsetY * overlayCanvas.height);
-        scale = part.defaultScale;
-        rotation = part.rotation;
-        
-        // Динамічне масштабування
+        // Динамічне масштабування на основі розмірів тіла
         if (keypoints.leftShoulder && keypoints.rightShoulder && 
             keypoints.leftShoulder.score > 0.2 && keypoints.rightShoulder.score > 0.2) {
           const shoulderWidth = Math.abs(keypoints.leftShoulder.x - keypoints.rightShoulder.x);
           scale = Math.max(0.15, Math.min(1.0, shoulderWidth / overlayCanvas.width * 2.2));
         }
-      }
-      
-      if (targetX && targetY) {
+        
+        // Плавна інтерполяція
         const smoothFactor = 0.2;
         tattooX = (1 - smoothFactor) * tattooX + smoothFactor * (targetX / overlayCanvas.width);
         tattooY = (1 - smoothFactor) * tattooY + smoothFactor * (targetY / overlayCanvas.height);
@@ -1137,38 +1075,8 @@
         loading.innerHTML = errorMsg;
       }
     }
-    
-    // Автозбереження стану
-    function saveAppState() {
-      const state = {
-        selectedBodyPart: selectedBodyPart.keypoint,
-        tattooScale,
-        tattooAngle,
-        manualMode,
-        currentLang
-      };
-      localStorage.setItem('tattooAppState', JSON.stringify(state));
-    }
 
-    function loadAppState() {
-      const saved = localStorage.getItem('tattooAppState');
-      if (saved) {
-        const state = JSON.parse(saved);
-        const savedPart = BODY_PARTS.find(p => p.keypoint === state.selectedBodyPart);
-        if (savedPart) selectedBodyPart = savedPart;
-        tattooScale = state.tattooScale || tattooScale;
-        tattooAngle = state.tattooAngle || tattooAngle;
-        manualMode = state.manualMode || manualMode;
-        setLanguage(state.currentLang || 'uk');
-      }
-    }
-
-    // Завантажуємо стан при старті
-    loadAppState();
-    
-    // Зберігаємо стан при виході
-    window.addEventListener('beforeunload', saveAppState);
-    
+    // Запускаємо додаток
     initializeApp();
   </script>
 </body>
