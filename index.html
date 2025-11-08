@@ -186,8 +186,9 @@
 
   <input type="file" id="fileInput" accept="image/png" style="display:none" />
 
+  <!-- PoseNet замість BodyPix -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.0.5"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet@2.2.2"></script>
 
   <script>
     // === Мови ===
@@ -404,20 +405,21 @@
       if (!net || manualMode) return;
       
       try {
-        const poses = await net.estimatePoses(video, {
+        // PoseNet використовує estimateSinglePose або estimateMultiplePoses
+        const pose = await net.estimateSinglePose(video, {
           flipHorizontal: false,
-          maxDetections: 1,
-          scoreThreshold: 0.5,
-          nmsRadius: 20
+          decodingMethod: 'single-person'
         });
 
-        if (poses.length > 0) {
-          const pose = poses[0];
-          const keypoints = pose.keypoints;
+        if (pose && pose.keypoints) {
           const keypointMap = {};
           
-          keypoints.forEach(kp => {
-            keypointMap[kp.name] = kp;
+          pose.keypoints.forEach(kp => {
+            keypointMap[kp.part] = {
+              x: kp.position.x,
+              y: kp.position.y,
+              score: kp.score
+            };
           });
 
           attachTattooToBody(keypointMap);
@@ -575,19 +577,19 @@
       }
     });
 
-    // === Ініціалізація BodyPix ===
+    // === Ініціалізація PoseNet ===
     async function initPose() {
       try {
         loading.innerHTML = "🔄 Loading pose detection model...";
-        net = await bodyPix.load({
+        net = await posenet.load({
           architecture: 'MobileNetV1',
           outputStride: 16,
-          multiplier: 0.75,
-          quantBytes: 2
+          inputResolution: 257,
+          multiplier: 0.75
         });
-        console.log("BodyPix model loaded successfully");
+        console.log("PoseNet model loaded successfully");
       } catch (error) {
-        console.error("Error loading BodyPix:", error);
+        console.error("Error loading PoseNet:", error);
         throw error;
       }
     }
