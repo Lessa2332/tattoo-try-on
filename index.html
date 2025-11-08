@@ -162,6 +162,21 @@
       z-index: 100;
       display: none;
     }
+
+    /* Додаємо відлагоджувальну інформацію */
+    #debugInfo {
+      position: fixed;
+      top: 60px;
+      left: 12px;
+      background: rgba(0,0,0,0.8);
+      color: lime;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 12px;
+      z-index: 100;
+      display: none;
+      max-width: 300px;
+    }
   </style>
 </head>
 <body>
@@ -175,6 +190,7 @@
 
   <button id="langToggle">🇺🇦</button>
   <div id="manualIndicator">Manual Mode</div>
+  <div id="debugInfo"></div>
 
   <div id="tattooPicker"></div>
   <div id="bodyPartPanel"></div>
@@ -182,6 +198,7 @@
   <div class="panel">
     <button id="captureBtn" class="btn">📸 Capture</button>
     <button id="uploadBtn" class="btn">➕ Upload PNG</button>
+    <button id="debugToggle" class="btn">🐛 Debug</button>
   </div>
 
   <input type="file" id="fileInput" accept="image/png" style="display:none" />
@@ -199,6 +216,7 @@
         capture: "📸 Capture",
         upload: "➕ Upload PNG",
         manualMode: "Manual Mode",
+        debug: "🐛 Debug",
         bodyParts: {
           "Left Shoulder": "Left Shoulder",
           "Right Shoulder": "Right Shoulder", 
@@ -220,6 +238,7 @@
         capture: "📸 Зробити фото",
         upload: "➕ Завантажити PNG",
         manualMode: "Ручний режим",
+        debug: "🐛 Дебаг",
         bodyParts: {
           "Left Shoulder": "Ліве плече",
           "Right Shoulder": "Праве плече",
@@ -239,23 +258,25 @@
 
     let currentLang = 'en';
     let net = null;
+    let debugMode = false;
 
     // === Конфіг ===
     const TATTOO_NAMES = ["skull", "rose"];
 
+    // PoseNet використовує інші назви ключових точок!
     const BODY_PARTS = [
-      { name: "Left Shoulder", keypoint: "leftShoulder", type: "point" },
-      { name: "Right Shoulder", keypoint: "rightShoulder", type: "point" },
-      { name: "Left Elbow", keypoint: "leftElbow", type: "point" },
-      { name: "Right Elbow", keypoint: "rightElbow", type: "point" },
-      { name: "Left Wrist", keypoint: "leftWrist", type: "point" },
-      { name: "Right Wrist", keypoint: "rightWrist", type: "point" },
-      { name: "Left Hip", keypoint: "leftHip", type: "point" },
-      { name: "Right Hip", keypoint: "rightHip", type: "point" },
-      { name: "Left Knee", keypoint: "leftKnee", type: "point" },
-      { name: "Right Knee", keypoint: "rightKnee", type: "point" },
-      { name: "Left Ankle", keypoint: "leftAnkle", type: "point" },
-      { name: "Right Ankle", keypoint: "rightAnkle", type: "point" }
+      { name: "Left Shoulder", keypoint: "leftShoulder", posenetKey: "leftShoulder", type: "point" },
+      { name: "Right Shoulder", keypoint: "rightShoulder", posenetKey: "rightShoulder", type: "point" },
+      { name: "Left Elbow", keypoint: "leftElbow", posenetKey: "leftElbow", type: "point" },
+      { name: "Right Elbow", keypoint: "rightElbow", posenetKey: "rightElbow", type: "point" },
+      { name: "Left Wrist", keypoint: "leftWrist", posenetKey: "leftWrist", type: "point" },
+      { name: "Right Wrist", keypoint: "rightWrist", posenetKey: "rightWrist", type: "point" },
+      { name: "Left Hip", keypoint: "leftHip", posenetKey: "leftHip", type: "point" },
+      { name: "Right Hip", keypoint: "rightHip", posenetKey: "rightHip", type: "point" },
+      { name: "Left Knee", keypoint: "leftKnee", posenetKey: "leftKnee", type: "point" },
+      { name: "Right Knee", keypoint: "rightKnee", posenetKey: "rightKnee", type: "point" },
+      { name: "Left Ankle", keypoint: "leftAnkle", posenetKey: "leftAnkle", type: "point" },
+      { name: "Right Ankle", keypoint: "rightAnkle", posenetKey: "rightAnkle", type: "point" }
     ];
 
     let currentTattoo = null;
@@ -264,11 +285,12 @@
     let tattooAngle = 0;
     let isDragging = false;
     let dragOffsetX = 0, dragOffsetY = 0;
-    let selectedBodyPart = BODY_PARTS[4];
+    let selectedBodyPart = BODY_PARTS[4]; // Left Wrist за замовчуванням
     let activeTouches = {};
     let manualMode = false;
     let initialDistance = 0;
     let initialScale = 0.3;
+    let lastPose = null;
 
     // === DOM ===
     const video = document.getElementById("video");
@@ -282,6 +304,8 @@
     const bodyPartPanel = document.getElementById("bodyPartPanel");
     const langToggle = document.getElementById("langToggle");
     const manualIndicator = document.getElementById("manualIndicator");
+    const debugInfo = document.getElementById("debugInfo");
+    const debugToggle = document.getElementById("debugToggle");
 
     function setLanguage(lang) {
       currentLang = lang;
@@ -290,6 +314,7 @@
       document.getElementById('loading').innerHTML = LANGUAGES[lang].loading;
       document.getElementById('captureBtn').textContent = LANGUAGES[lang].capture;
       document.getElementById('uploadBtn').textContent = LANGUAGES[lang].upload;
+      document.getElementById('debugToggle').textContent = LANGUAGES[lang].debug;
       document.getElementById('manualIndicator').textContent = LANGUAGES[lang].manualMode;
       document.getElementById('langToggle').textContent = lang === 'en' ? '🇺🇦' : '🇬🇧';
       buildBodyPartSelector();
@@ -299,9 +324,35 @@
       manualIndicator.style.display = manualMode ? 'block' : 'none';
     }
 
+    function updateDebugInfo() {
+      if (!debugMode) {
+        debugInfo.style.display = 'none';
+        return;
+      }
+      
+      debugInfo.style.display = 'block';
+      let debugText = `Tattoo: ${tattooX.toFixed(2)}, ${tattooY.toFixed(2)}<br>`;
+      debugText += `Scale: ${tattooScale.toFixed(2)}<br>`;
+      debugText += `Manual: ${manualMode}<br>`;
+      
+      if (lastPose) {
+        const part = selectedBodyPart;
+        const kp = lastPose[part.posenetKey];
+        debugText += `Selected: ${part.name}<br>`;
+        debugText += `Keypoint: ${kp ? `x:${kp.x}, y:${kp.y}, score:${kp.score.toFixed(2)}` : 'NOT FOUND'}`;
+      }
+      
+      debugInfo.innerHTML = debugText;
+    }
+
     langToggle.onclick = () => {
       if (navigator.vibrate) navigator.vibrate(10);
       setLanguage(currentLang === 'en' ? 'uk' : 'en');
+    };
+
+    debugToggle.onclick = () => {
+      debugMode = !debugMode;
+      updateDebugInfo();
     };
 
     function resizeCanvas() {
@@ -392,6 +443,8 @@
     function redrawTattoo() {
       if (!currentTattoo) return;
       ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      
+      // Малюємо татуювання
       const w = overlayCanvas.width * tattooScale;
       const h = (currentTattoo.height / currentTattoo.width) * w;
       ctx.save();
@@ -399,19 +452,57 @@
       ctx.rotate(tattooAngle);
       ctx.drawImage(currentTattoo, -w / 2, -h / 2, w, h);
       ctx.restore();
+
+      // Додаємо відлагоджувальну інформацію
+      if (debugMode && lastPose) {
+        drawDebugInfo();
+      }
+    }
+
+    function drawDebugInfo() {
+      ctx.save();
+      ctx.strokeStyle = 'lime';
+      ctx.fillStyle = 'lime';
+      ctx.lineWidth = 2;
+      
+      // Малюємо всі ключові точки
+      Object.values(lastPose).forEach(kp => {
+        if (kp && kp.score > 0.3) {
+          ctx.beginPath();
+          ctx.arc(kp.x, kp.y, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+      
+      // Підсвічуємо вибрану точку
+      const selectedKp = lastPose[selectedBodyPart.posenetKey];
+      if (selectedKp && selectedKp.score > 0.3) {
+        ctx.strokeStyle = 'gold';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(selectedKp.x, selectedKp.y, 10, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Текст з назвою частини тіла
+        ctx.fillStyle = 'gold';
+        ctx.font = '14px Arial';
+        ctx.fillText(selectedBodyPart.name, selectedKp.x + 15, selectedKp.y - 10);
+      }
+      
+      ctx.restore();
     }
 
     async function detectPose() {
       if (!net || manualMode) return;
       
       try {
-        // PoseNet використовує estimateSinglePose або estimateMultiplePoses
         const pose = await net.estimateSinglePose(video, {
           flipHorizontal: false,
           decodingMethod: 'single-person'
         });
 
         if (pose && pose.keypoints) {
+          // Конвертуємо ключові точки PoseNet в зручний формат
           const keypointMap = {};
           
           pose.keypoints.forEach(kp => {
@@ -422,12 +513,17 @@
             };
           });
 
+          lastPose = keypointMap;
           attachTattooToBody(keypointMap);
+        } else {
+          lastPose = null;
         }
       } catch (error) {
         console.error("Pose detection error:", error);
+        lastPose = null;
       }
       
+      updateDebugInfo();
       requestAnimationFrame(detectPose);
     }
 
@@ -435,20 +531,22 @@
       if (!currentTattoo || manualMode) return;
       
       const part = selectedBodyPart;
-      const kp = keypoints[part.keypoint];
+      const kp = keypoints[part.posenetKey]; // Використовуємо правильну назву для PoseNet
       
-      if (kp && kp.score > 0.5) {
+      if (kp && kp.score > 0.3) { // Знижуємо поріг для кращого трекінгу
         const x = kp.x / overlayCanvas.width;
         const y = kp.y / overlayCanvas.height;
         
-        tattooX = 0.7 * tattooX + 0.3 * x;
-        tattooY = 0.7 * tattooY + 0.3 * y;
+        // Плавна інтерполяція
+        tattooX = 0.8 * tattooX + 0.2 * x;
+        tattooY = 0.8 * tattooY + 0.2 * y;
         
         // Автоматичне масштабування на основі розміру тіла
-        if (keypoints.leftShoulder && keypoints.rightShoulder) {
+        if (keypoints.leftShoulder && keypoints.rightShoulder && 
+            keypoints.leftShoulder.score > 0.3 && keypoints.rightShoulder.score > 0.3) {
           const shoulderWidth = Math.abs(keypoints.leftShoulder.x - keypoints.rightShoulder.x);
-          const newScale = Math.max(0.2, Math.min(0.6, shoulderWidth / overlayCanvas.width * 1.5));
-          tattooScale = 0.8 * tattooScale + 0.2 * newScale;
+          const newScale = Math.max(0.15, Math.min(0.8, shoulderWidth / overlayCanvas.width * 2.0));
+          tattooScale = 0.9 * tattooScale + 0.1 * newScale;
         }
         
         redrawTattoo();
