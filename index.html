@@ -406,18 +406,23 @@
         manualMode: "Manual Mode",
         debug: "🐛 Debug",
         bodyParts: {
-          "Left Shoulder": "Left Shoulder",
-          "Right Shoulder": "Right Shoulder", 
-          "Left Elbow": "Left Elbow",
-          "Right Elbow": "Right Elbow",
-          "Left Wrist": "Left Wrist",
-          "Right Wrist": "Right Wrist",
-          "Left Hip": "Left Hip",
-          "Right Hip": "Right Hip",
-          "Left Knee": "Left Knee",
-          "Right Knee": "Right Knee",
-          "Left Ankle": "Left Ankle",
-          "Right Ankle": "Right Ankle"
+          "nose": "Nose",
+          "leftEye": "Left Eye",
+          "rightEye": "Right Eye",
+          "leftEar": "Left Ear", 
+          "rightEar": "Right Ear",
+          "leftShoulder": "Left Shoulder",
+          "rightShoulder": "Right Shoulder", 
+          "leftElbow": "Left Elbow",
+          "rightElbow": "Right Elbow",
+          "leftWrist": "Left Wrist",
+          "rightWrist": "Right Wrist",
+          "leftHip": "Left Hip",
+          "rightHip": "Right Hip",
+          "leftKnee": "Left Knee",
+          "rightKnee": "Right Knee",
+          "leftAnkle": "Left Ankle",
+          "rightAnkle": "Right Ankle"
         }
       },
       uk: {
@@ -428,18 +433,23 @@
         manualMode: "Ручний режим",
         debug: "🐛 Дебаг",
         bodyParts: {
-          "Left Shoulder": "Ліве плече",
-          "Right Shoulder": "Праве плече",
-          "Left Elbow": "Лівий лікоть",
-          "Right Elbow": "Правий лікоть",
-          "Left Wrist": "Ліве зап'ястя",
-          "Right Wrist": "Праве зап'ястя",
-          "Left Hip": "Ліве стегно",
-          "Right Hip": "Праве стегно",
-          "Left Knee": "Ліве коліно",
-          "Right Knee": "Праве коліно",
-          "Left Ankle": "Ліва щиколотка",
-          "Right Ankle": "Права щиколотка"
+          "nose": "Ніс",
+          "leftEye": "Ліве око",
+          "rightEye": "Праве око",
+          "leftEar": "Ліве вухо",
+          "rightEar": "Праве вухо",
+          "leftShoulder": "Ліве плече",
+          "rightShoulder": "Праве плече",
+          "leftElbow": "Лівий лікоть",
+          "rightElbow": "Правий лікоть",
+          "leftWrist": "Ліве зап'ястя",
+          "rightWrist": "Праве зап'ястя",
+          "leftHip": "Ліве стегно",
+          "rightHip": "Праве стегно",
+          "leftKnee": "Ліве коліно",
+          "rightKnee": "Праве коліно",
+          "leftAnkle": "Ліва щиколотка",
+          "rightAnkle": "Права щиколотка"
         }
       }
     };
@@ -448,127 +458,137 @@
     let net = null;
     let debugMode = false;
 
-    // === Конфігурація частин тіла ===
+    // === Коректна конфігурація частин тіла для PoseNet ===
     const BODY_PARTS = [
       { 
-        name: "Left Shoulder", 
+        name: "nose", 
+        keypoint: "nose", 
+        posenetKey: "nose", 
+        type: "point",
+        defaultScale: 0.1,
+        rotation: 0,
+        offsetX: 0,
+        offsetY: 0
+      },
+      { 
+        name: "leftShoulder", 
         keypoint: "leftShoulder", 
         posenetKey: "leftShoulder", 
         type: "area",
-        defaultScale: 0.4,
+        defaultScale: 0.3,
         rotation: 0,
-        offsetX: 0,
-        offsetY: -0.1
+        offsetX: 0.05,
+        offsetY: -0.05
       },
       { 
-        name: "Right Shoulder", 
+        name: "rightShoulder", 
         keypoint: "rightShoulder", 
         posenetKey: "rightShoulder", 
         type: "area",
-        defaultScale: 0.4,
+        defaultScale: 0.3,
         rotation: 0,
-        offsetX: 0,
-        offsetY: -0.1
+        offsetX: -0.05,
+        offsetY: -0.05
       },
       { 
-        name: "Left Elbow", 
+        name: "leftElbow", 
         keypoint: "leftElbow", 
         posenetKey: "leftElbow", 
         type: "point",
-        defaultScale: 0.3,
+        defaultScale: 0.25,
         rotation: Math.PI/4,
-        offsetX: 0.05,
-        offsetY: 0
+        offsetX: 0.08,
+        offsetY: 0.02
       },
       { 
-        name: "Right Elbow", 
+        name: "rightElbow", 
         keypoint: "rightElbow", 
         posenetKey: "rightElbow", 
         type: "point",
-        defaultScale: 0.3,
+        defaultScale: 0.25,
         rotation: -Math.PI/4,
-        offsetX: -0.05,
-        offsetY: 0
+        offsetX: -0.08,
+        offsetY: 0.02
       },
       { 
-        name: "Left Wrist", 
+        name: "leftWrist", 
         keypoint: "leftWrist", 
         posenetKey: "leftWrist", 
         type: "point",
-        defaultScale: 0.25,
+        defaultScale: 0.2,
         rotation: Math.PI/2,
-        offsetX: 0.08,
-        offsetY: 0
+        offsetX: 0.1,
+        offsetY: 0.05
       },
       { 
-        name: "Right Wrist", 
+        name: "rightWrist", 
         keypoint: "rightWrist", 
         posenetKey: "rightWrist", 
         type: "point",
-        defaultScale: 0.25,
+        defaultScale: 0.2,
         rotation: -Math.PI/2,
-        offsetX: -0.08,
-        offsetY: 0
+        offsetX: -0.1,
+        offsetY: 0.05
       },
       { 
-        name: "Left Hip", 
+        name: "leftHip", 
         keypoint: "leftHip", 
         posenetKey: "leftHip", 
         type: "area",
-        defaultScale: 0.35,
+        defaultScale: 0.3,
         rotation: 0,
-        offsetX: 0.03,
-        offsetY: -0.05
+        offsetX: 0.04,
+        offsetY: -0.08
       },
       { 
-        name: "Right Hip", 
+        name: "rightHip", 
         keypoint: "rightHip", 
         posenetKey: "rightHip", 
         type: "area",
-        defaultScale: 0.35,
+        defaultScale: 0.3,
         rotation: 0,
-        offsetX: -0.03,
-        offsetY: -0.05
+        offsetX: -0.04,
+        offsetY: -0.08
       },
       { 
-        name: "Left Knee", 
+        name: "leftKnee", 
         keypoint: "leftKnee", 
         posenetKey: "leftKnee", 
         type: "point",
-        defaultScale: 0.3,
+        defaultScale: 0.25,
         rotation: Math.PI/6,
-        offsetX: 0.05,
+        offsetX: 0.06,
         offsetY: 0
       },
       { 
-        name: "Right Knee", 
+        name: "rightKnee", 
         keypoint: "rightKnee", 
         posenetKey: "rightKnee", 
         type: "point",
-        defaultScale: 0.3,
+        defaultScale: 0.25,
         rotation: -Math.PI/6,
-        offsetX: -0.05,
+        offsetX: -0.06,
         offsetY: 0
       },
       { 
-        name: "Left Ankle", 
+        name: "leftAnkle", 
         keypoint: "leftAnkle", 
         posenetKey: "leftAnkle", 
         type: "point",
-        defaultScale: 0.25,
+        defaultScale: 0.2,
         rotation: Math.PI/3,
         offsetX: 0.05,
-        offsetY: 0.02
+        offsetY: 0.03
       },
       { 
-        name: "Right Ankle", 
+        name: "rightAnkle", 
         keypoint: "rightAnkle", 
         posenetKey: "rightAnkle", 
         type: "point",
-        defaultScale: 0.25,
+        defaultScale: 0.2,
         rotation: -Math.PI/3,
         offsetX: -0.05,
-        offsetY: 0.02
+        offsetY: 0.03
       }
     ];
 
@@ -581,7 +601,7 @@
     let tattooAngle = 0;
     let isDragging = false;
     let dragOffsetX = 0, dragOffsetY = 0;
-    let selectedBodyPart = BODY_PARTS[4]; // Left Wrist за замовчуванням
+    let selectedBodyPart = BODY_PARTS[5]; // leftWrist за замовчуванням
     let activeTouches = {};
     let manualMode = false;
     let initialDistance = 0;
@@ -637,9 +657,11 @@
         const part = selectedBodyPart;
         debugText += `Selected: ${part.name}<br>`;
         
-        if (part.posenetKey && lastPose[part.posenetKey]) {
+        if (lastPose[part.posenetKey]) {
           const kp = lastPose[part.posenetKey];
           debugText += `Keypoint: x:${kp.x.toFixed(0)}, y:${kp.y.toFixed(0)}, score:${kp.score.toFixed(2)}`;
+        } else {
+          debugText += `Keypoint: NOT FOUND`;
         }
       }
       
@@ -774,25 +796,28 @@
       ctx.font = '12px Arial';
       
       // Малюємо всі ключові точки
-      Object.values(lastPose).forEach(kp => {
+      Object.entries(lastPose).forEach(([key, kp]) => {
         if (kp && kp.score > 0.2) {
           ctx.beginPath();
           ctx.arc(kp.x, kp.y, 4, 0, Math.PI * 2);
           ctx.fill();
+          
+          // Підписи для точок
+          ctx.fillText(key, kp.x + 8, kp.y - 8);
         }
       });
       
       // Підсвічуємо вибрану точку
-      const selectedKp = selectedBodyPart.posenetKey ? lastPose[selectedBodyPart.posenetKey] : null;
+      const selectedKp = lastPose[selectedBodyPart.posenetKey];
       if (selectedKp && selectedKp.score > 0.2) {
         ctx.strokeStyle = 'gold';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(selectedKp.x, selectedKp.y, 12, 0, Math.PI * 2);
+        ctx.arc(selectedKp.x, selectedKp.y, 15, 0, Math.PI * 2);
         ctx.stroke();
         
         ctx.fillStyle = 'gold';
-        ctx.fillText(selectedBodyPart.name, selectedKp.x + 15, selectedKp.y - 10);
+        ctx.fillText(selectedBodyPart.name, selectedKp.x + 20, selectedKp.y - 12);
       }
       
       ctx.restore();
@@ -838,7 +863,7 @@
       const part = selectedBodyPart;
       const kp = keypoints[part.posenetKey];
       
-      if (kp && kp.score > 0.2) {
+      if (kp && kp.score > 0.3) { // Збільшимо поріг для кращої точності
         const targetX = kp.x + (part.offsetX * overlayCanvas.width);
         const targetY = kp.y + (part.offsetY * overlayCanvas.height);
         let scale = part.defaultScale;
@@ -846,13 +871,13 @@
         
         // Динамічне масштабування на основі розмірів тіла
         if (keypoints.leftShoulder && keypoints.rightShoulder && 
-            keypoints.leftShoulder.score > 0.2 && keypoints.rightShoulder.score > 0.2) {
+            keypoints.leftShoulder.score > 0.3 && keypoints.rightShoulder.score > 0.3) {
           const shoulderWidth = Math.abs(keypoints.leftShoulder.x - keypoints.rightShoulder.x);
-          scale = Math.max(0.15, Math.min(1.0, shoulderWidth / overlayCanvas.width * 2.2));
+          scale = Math.max(0.1, Math.min(0.8, shoulderWidth / overlayCanvas.width * 1.5));
         }
         
         // Плавна інтерполяція
-        const smoothFactor = 0.2;
+        const smoothFactor = 0.3; // Збільшимо для більш плавного руху
         tattooX = (1 - smoothFactor) * tattooX + smoothFactor * (targetX / overlayCanvas.width);
         tattooY = (1 - smoothFactor) * tattooY + smoothFactor * (targetY / overlayCanvas.height);
         tattooScale = (1 - smoothFactor) * tattooScale + smoothFactor * scale;
