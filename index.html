@@ -2,17 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Tattoo Try-On AR</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       background: #000;
       overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Segoe UI', Arial, sans-serif;
       color: white;
       touch-action: none;
-      -webkit-text-size-adjust: 100%;
     }
     #video, #overlayCanvas {
       position: absolute;
@@ -23,89 +22,29 @@
     #video { z-index: 1; }
     #overlayCanvas { z-index: 2; pointer-events: none; }
 
-    /* Language toggle */
-    #langToggle {
-      position: fixed;
-      top: 12px;
-      right: 12px;
-      z-index: 100;
-      background: rgba(0,0,0,0.6);
-      color: white;
-      border: none;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      font-weight: bold;
-      cursor: pointer;
-      backdrop-filter: blur(10px);
-    }
-
-    /* Body part selector – horizontal scroll */
-    #bodyPartPanel {
-      position: fixed;
-      bottom: 160px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 12px;
-      z-index: 100;
-      background: rgba(0,0,0,0.6);
-      padding: 10px;
-      border-radius: 20px;
-      backdrop-filter: blur(10px);
-      max-width: 90vw;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    #bodyPartPanel::-webkit-scrollbar { display: none; }
-    #bodyPartPanel { scrollbar-width: none; }
-
-    .body-part-btn {
-      padding: 8px 12px;
-      background: rgba(255,255,255,0.2);
-      border: 2px solid white;
-      border-radius: 16px;
-      color: white;
-      font-size: 13px;
-      cursor: pointer;
-      white-space: nowrap;
-      min-width: 80px;
-      text-align: center;
-    }
-    .body-part-btn.active {
-      background: gold;
-      color: #000;
-      font-weight: bold;
-    }
-
     .panel {
       position: fixed;
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 12px;
+      gap: 10px;
       z-index: 100;
       background: rgba(0,0,0,0.6);
-      padding: 12px;
+      padding: 10px 14px;
       border-radius: 24px;
       backdrop-filter: blur(10px);
-      max-width: 90vw;
-      overflow-x: auto;
     }
-    .panel::-webkit-scrollbar { display: none; }
 
     .btn {
-      padding: 12px 16px;
+      padding: 10px 16px;
       background: rgba(255,255,255,0.2);
       border: 2px solid white;
       border-radius: 20px;
       color: white;
-      font-size: 15px;
+      font-size: 14px;
       cursor: pointer;
       white-space: nowrap;
-      min-width: 100px;
-      text-align: center;
     }
     .btn.active {
       background: gold;
@@ -119,39 +58,26 @@
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 12px;
+      gap: 10px;
       z-index: 100;
-      background: rgba(0,0,0,0.6);
-      padding: 10px;
-      border-radius: 20px;
-      backdrop-filter: blur(10px);
-      max-width: 90vw;
-      overflow-x: auto;
     }
-    #tattooPicker::-webkit-scrollbar { display: none; }
-
     .tattoo-thumb {
-      width: 60px; height: 60px;
+      width: 56px; height: 56px;
       border: 2px solid white;
-      border-radius: 12px;
+      border-radius: 10px;
       background: white;
       cursor: pointer;
       object-fit: contain;
     }
-    .tattoo-thumb.selected { 
-      border-color: gold; 
-      box-shadow: 0 0 0 2px gold;
-    }
+    .tattoo-thumb.selected { border-color: gold; box-shadow: 0 0 0 2px gold; }
 
     #loading {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: #000; display: flex; flex-direction: column;
       align-items: center; justify-content: center; z-index: 999;
       color: white; font-size: 18px;
-      padding: 20px;
-      text-align: center;
     }
-    #loading p { margin-top: 16px; font-size: 14px; color: #aaa; }
+    #loading p { margin-top: 12px; font-size: 14px; color: #aaa; }
   </style>
 </head>
 <body>
@@ -163,77 +89,19 @@
   <video id="video" playsinline muted></video>
   <canvas id="overlayCanvas"></canvas>
 
-  <button id="langToggle">🇺🇦</button>
-
   <div id="tattooPicker"></div>
-  <div id="bodyPartPanel"></div>
 
   <div class="panel">
     <button id="captureBtn" class="btn">📸 Capture</button>
     <button id="uploadBtn" class="btn">➕ Upload PNG</button>
   </div>
 
+  <div id="bodyPartPanel" class="panel" style="bottom: 160px; flex-wrap: wrap; max-width: 90vw;"></div>
+
   <input type="file" id="fileInput" accept="image/png" style="display:none" />
 
   <script type="module">
-    // === Мови ===
-    const LANGUAGES = {
-      en: {
-        title: "Tattoo Try-On AR",
-        loading: "🔍 Loading camera and pose detection...<br><p>Please allow camera access</p>",
-        capture: "📸 Capture",
-        upload: "➕ Upload PNG",
-        bodyParts: {
-          "Left Shoulder": "Left Shoulder",
-          "Right Shoulder": "Right Shoulder",
-          "Left Elbow": "Left Elbow",
-          "Right Elbow": "Right Elbow",
-          "Left Wrist": "Left Wrist",
-          "Right Wrist": "Right Wrist",
-          "Left Hip": "Left Hip",
-          "Right Hip": "Right Hip",
-          "Left Knee": "Left Knee",
-          "Right Knee": "Right Knee",
-          "Left Ankle": "Left Ankle",
-          "Right Ankle": "Right Ankle"
-        }
-      },
-      uk: {
-        title: "AR Примірка тату",
-        loading: "🔍 Завантаження камери та трекінгу...<br><p>Будь ласка, дозволь доступ до камери</p>",
-        capture: "📸 Зробити фото",
-        upload: "➕ Завантажити PNG",
-        bodyParts: {
-          "Left Shoulder": "Ліве плече",
-          "Right Shoulder": "Праве плече",
-          "Left Elbow": "Лікий лікоть",
-          "Right Elbow": "Правий лікоть",
-          "Left Wrist": "Ліве зап'ястя",
-          "Right Wrist": "Праве зап'ястя",
-          "Left Hip": "Ліве стегно",
-          "Right Hip": "Праве стегно",
-          "Left Knee": "Ліве коліно",
-          "Right Knee": "Праве коліно",
-          "Left Ankle": "Ліва щиколотка",
-          "Right Ankle": "Права щиколотка"
-        }
-      }
-    };
-
-    let currentLang = 'en'; // за замовчуванням англійська
-
-    function setLanguage(lang) {
-      currentLang = lang;
-      document.documentElement.lang = lang;
-      document.title = LANGUAGES[lang].title;
-      document.getElementById('loading').innerHTML = LANGUAGES[lang].loading;
-      document.getElementById('captureBtn').textContent = LANGUAGES[lang].capture;
-      document.getElementById('uploadBtn').textContent = LANGUAGES[lang].upload;
-      document.getElementById('langToggle').textContent = lang === 'en' ? '🇺🇦' : '🇬🇧';
-      buildBodyPartSelector(); // оновити назви
-    }
-
-    // === Конфіг ===
+    // Використовуємо файли з вашого репозиторію
     const TATTOO_NAMES = ["skull", "rose"];
 
     const BODY_PARTS = [
@@ -257,11 +125,10 @@
     let tattooAngle = 0;
     let isDragging = false;
     let dragOffsetX = 0, dragOffsetY = 0;
-    let selectedBodyPart = BODY_PARTS[4]; // Left Wrist
+    let selectedBodyPart = BODY_PARTS[4];
     let activeTouches = {};
     let manualMode = false;
 
-    // === DOM ===
     const video = document.getElementById("video");
     const overlayCanvas = document.getElementById("overlayCanvas");
     const ctx = overlayCanvas.getContext("2d");
@@ -271,21 +138,13 @@
     const captureBtn = document.getElementById("captureBtn");
     const fileInput = document.getElementById("fileInput");
     const bodyPartPanel = document.getElementById("bodyPartPanel");
-    const langToggle = document.getElementById("langToggle");
 
-    // === Переключення мови ===
-    langToggle.onclick = () => {
-      setLanguage(currentLang === 'en' ? 'uk' : 'en');
-    };
-
-    // === Ресайз ===
     function resizeCanvas() {
       overlayCanvas.width = video.videoWidth || window.innerWidth;
       overlayCanvas.height = video.videoHeight || window.innerHeight;
       redrawTattoo();
     }
 
-    // === Вибір тату ===
     function buildTattooPicker() {
       tattooPicker.innerHTML = "";
       TATTOO_NAMES.forEach(name => {
@@ -313,20 +172,50 @@
         manualMode = false;
         redrawTattoo();
       };
+      img.onerror = () => {
+        console.error("Failed to load tattoo:", src);
+        // Fallback - створимо просте зображення як запасний варіант
+        createFallbackTattoo();
+      };
       img.src = src;
     }
 
-    // === Вибір частини тіла (з перекладом) ===
+    function createFallbackTattoo() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 200;
+      canvas.height = 200;
+      const ctx = canvas.getContext('2d');
+      
+      // Створюємо просте татуювання як запасний варіант
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(100, 100, 80, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.fillStyle = 'black';
+      ctx.beginPath();
+      ctx.arc(100, 100, 60, 0, Math.PI * 2);
+      ctx.fill();
+      
+      const img = new Image();
+      img.onload = () => {
+        currentTattoo = img;
+        manualMode = false;
+        redrawTattoo();
+      };
+      img.src = canvas.toDataURL();
+    }
+
     function buildBodyPartSelector() {
       bodyPartPanel.innerHTML = "";
       BODY_PARTS.forEach(part => {
         const btn = document.createElement("button");
-        btn.className = "body-part-btn";
-        btn.textContent = LANGUAGES[currentLang].bodyParts[part.name] || part.name;
+        btn.className = "btn";
+        btn.textContent = part.name;
         btn.onclick = () => {
           selectedBodyPart = part;
           manualMode = false;
-          document.querySelectorAll('.body-part-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('#bodyPartPanel .btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
         };
         if (part === selectedBodyPart) btn.classList.add('active');
@@ -334,7 +223,6 @@
       });
     }
 
-    // === Малювання тату ===
     function redrawTattoo() {
       if (!currentTattoo) return;
       ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
@@ -347,7 +235,6 @@
       ctx.restore();
     }
 
-    // === Прив'язка до тіла ===
     function attachTattooToBody(landmarks) {
       if (!landmarks || !currentTattoo || manualMode) return;
       const part = selectedBodyPart;
@@ -378,7 +265,6 @@
       }
     }
 
-    // === Завантаження PNG ===
     uploadBtn.onclick = () => fileInput.click();
     fileInput.onchange = (e) => {
       const file = e.target.files[0];
@@ -390,7 +276,6 @@
       }
     };
 
-    // === Захоплення фото ===
     captureBtn.onclick = () => {
       const captureCanvas = document.createElement("canvas");
       captureCanvas.width = overlayCanvas.width;
@@ -412,7 +297,6 @@
       link.click();
     };
 
-    // === Жести ===
     overlayCanvas.addEventListener("touchstart", (e) => {
       if (!currentTattoo) return;
       e.preventDefault();
@@ -472,56 +356,93 @@
       }
     });
 
-    // === MediaPipe ===
-    import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest";
+    // Виправлені URL для MediaPipe
+    import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/+esm";
 
     let poseLandmarker = null;
 
     async function initPose() {
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-      );
-      poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker/float16/1/pose_landmarker.tflite"
-        },
-        runningMode: "VIDEO",
-        numPoses: 1
-      });
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+        );
+        
+        poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker/float16/latest/pose_landmarker.tflite"
+          },
+          runningMode: "VIDEO",
+          numPoses: 1
+        });
+        console.log("Pose Landmarker loaded successfully");
+      } catch (error) {
+        console.error("Error loading pose landmarker:", error);
+        loading.innerHTML = "❌ Pose detection failed to load<br><small>Check console for details</small>";
+        throw error;
+      }
     }
 
     async function setupCamera() {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" }
-      });
-      video.srcObject = stream;
-      await video.play();
-      resizeCanvas();
-      window.addEventListener("resize", resizeCanvas);
-      loading.style.display = "none";
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        video.srcObject = stream;
+        
+        await new Promise((resolve, reject) => {
+          video.onloadedmetadata = () => {
+            video.play().then(resolve).catch(reject);
+          };
+          video.onerror = reject;
+        });
+        
+        resizeCanvas();
+        window.addEventListener("resize", resizeCanvas);
+        loading.style.display = "none";
+      } catch (error) {
+        console.error("Camera error:", error);
+        loading.innerHTML = "❌ Camera access denied<br><small>Please allow camera permissions and refresh</small>";
+        throw error;
+      }
     }
 
     let lastVideoTime = -1;
     function detectPose() {
-      if (video.currentTime !== lastVideoTime && poseLandmarker) {
+      if (video.readyState >= 2 && video.currentTime !== lastVideoTime && poseLandmarker) {
         lastVideoTime = video.currentTime;
-        const results = poseLandmarker.detectForVideo(video, performance.now());
-        if (results.landmarks && results.landmarks.length > 0) {
-          attachTattooToBody(results.landmarks[0]);
+        try {
+          const results = poseLandmarker.detectForVideo(video, performance.now());
+          if (results.landmarks && results.landmarks.length > 0) {
+            attachTattooToBody(results.landmarks[0]);
+          }
+        } catch (error) {
+          console.error("Pose detection error:", error);
         }
       }
       requestAnimationFrame(detectPose);
     }
 
-    // === Старт ===
+    // Ініціалізація додатку
     buildTattooPicker();
     buildBodyPartSelector();
-    Promise.all([setupCamera(), initPose()])
-      .then(() => detectPose())
-      .catch(err => {
-        console.error("Init error:", err);
-        loading.innerHTML = "❌ Failed to start<br><small>Try Chrome/Safari on mobile</small>";
-      });
+    
+    async function initializeApp() {
+      try {
+        await initPose();
+        await setupCamera();
+        detectPose();
+      } catch (error) {
+        console.error("App initialization failed:", error);
+        loading.innerHTML = "❌ Initialization failed<br><small>" + error.message + "</small>";
+      }
+    }
+    
+    // Запускаємо додаток
+    initializeApp();
   </script>
 </body>
 </html>
