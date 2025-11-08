@@ -13,22 +13,14 @@
       color: white;
       touch-action: none;
     }
-    #video, #canvas {
+    #video, #overlayCanvas {
       position: absolute;
       top: 0; left: 0;
       width: 100%; height: 100%;
       object-fit: cover;
     }
     #video { z-index: 1; }
-    #canvas { z-index: 2; }
-
-    #tattooOverlay {
-      position: absolute;
-      z-index: 3;
-      pointer-events: auto; /* важливо для жестів */
-      image-rendering: -webkit-optimize-contrast;
-      display: none;
-    }
+    #overlayCanvas { z-index: 2; pointer-events: none; }
 
     /* UI */
     .panel {
@@ -96,8 +88,7 @@
   </div>
 
   <video id="video" playsinline muted></video>
-  <canvas id="canvas"></canvas>
-  <img id="tattooOverlay" draggable="false" />
+  <canvas id="overlayCanvas"></canvas>
 
   <div id="tattooPicker"></div>
 
@@ -115,37 +106,37 @@
 
   <script type="module">
     // === CONFIG ===
-    const TATTOO_NAMES = ["skull", "rose"]; // додай свої файли з /tattoos/
+    const TATTOO_NAMES = ["skull", "rose"]; // зміни на свої файли в /tattoos/
 
-    // Body parts for tattoo placement (name, landmark index)
     const BODY_PARTS = [
-      { name: "Left Shoulder", idx: 11 },
-      { name: "Right Shoulder", idx: 12 },
-      { name: "Left Elbow", idx: 13 },
-      { name: "Right Elbow", idx: 14 },
-      { name: "Left Wrist", idx: 15 },
-      { name: "Right Wrist", idx: 16 },
-      { name: "Left Hip", idx: 23 },
-      { name: "Right Hip", idx: 24 },
-      { name: "Left Knee", idx: 25 },
-      { name: "Right Knee", idx: 26 },
-      { name: "Left Ankle", idx: 27 },
-      { name: "Right Ankle", idx: 28 }
+      { name: "Left Shoulder", idx: 11, type: "point" },
+      { name: "Right Shoulder", idx: 12, type: "point" },
+      { name: "Left Elbow", idx: 13, type: "vector", end: 15 },
+      { name: "Right Elbow", idx: 14, type: "vector", end: 16 },
+      { name: "Left Wrist", idx: 15, type: "vector", end: 19 },
+      { name: "Right Wrist", idx: 16, type: "vector", end: 20 },
+      { name: "Left Hip", idx: 23, type: "point" },
+      { name: "Right Hip", idx: 24, type: "point" },
+      { name: "Left Knee", idx: 25, type: "vector", end: 27 },
+      { name: "Right Knee", idx: 26, type: "vector", end: 28 },
+      { name: "Left Ankle", idx: 27, type: "vector", end: 31 },
+      { name: "Right Ankle", idx: 28, type: "vector", end: 32 }
     ];
 
     let currentTattoo = null;
     let tattooX = 0.5, tattooY = 0.5;
     let tattooScale = 0.3;
+    let tattooAngle = 0; // in radians
     let isDragging = false;
     let dragOffsetX = 0, dragOffsetY = 0;
-    let selectedBodyPart = BODY_PARTS[4]; // default: Left Wrist
+    let selectedBodyPart = BODY_PARTS[4]; // Left Wrist by default
     let activeTouches = {};
+    let manualMode = false; // чи переміщував користувач вручну
 
     // === DOM ===
     const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    const tattooImg = document.getElementById("tattooOverlay");
+    const overlayCanvas = document.getElementById("overlayCanvas");
+    const ctx = overlayCanvas.getContext("2d");
     const loading = document.getElementById("loading");
     const tattooPicker = document.getElementById("tattooPicker");
     const uploadBtn = document.getElementById("uploadBtn");
@@ -153,14 +144,14 @@
     const fileInput = document.getElementById("fileInput");
     const bodyPartPanel = document.getElementById("bodyPartPanel");
 
-    // === Resize canvas ===
+    // === Resize ===
     function resizeCanvas() {
-      canvas.width = video.videoWidth || window.innerWidth;
-      canvas.height = video.videoHeight || window.innerHeight;
-      updateTattooPosition();
+      overlayCanvas.width = video.videoWidth || window.innerWidth;
+      overlayCanvas.height = video.videoHeight || window.innerHeight;
+      redrawTattoo();
     }
 
-    // === Tattoo picker ===
+    // === Tattoo Picker ===
     function buildTattooPicker() {
       tattooPicker.innerHTML = "";
       TATTOO_NAMES.forEach(name => {
@@ -185,14 +176,13 @@
       img.crossOrigin = "anonymous";
       img.onload = () => {
         currentTattoo = img;
-        tattooImg.src = src;
-        tattooImg.style.display = "block";
-        updateTattooPosition();
+        manualMode = false; // повертаємо до авто-режиму
+        redrawTattoo();
       };
       img.src = src;
     }
 
-    // === Body part selector ===
+    // === Body Part Selector ===
     function buildBodyPartSelector() {
       bodyPartPanel.innerHTML = "";
       BODY_PARTS.forEach(part => {
@@ -201,6 +191,7 @@
         btn.textContent = part.name;
         btn.onclick = () => {
           selectedBodyPart = part;
+          manualMode = false;
           document.querySelectorAll('#bodyPartPanel .btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
         };
@@ -209,26 +200,55 @@
       });
     }
 
-    // === Update tattoo position ===
-    function updateTattooPosition() {
+    // === Redraw tattoo on canvas ===
+    function redrawTattoo() {
       if (!currentTattoo) return;
-      const w = canvas.width * tattooScale;
+      ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+      const w = overlayCanvas.width * tattooScale;
       const h = (currentTattoo.height / currentTattoo.width) * w;
-      tattooImg.style.width = `${w}px`;
-      tattooImg.style.height = `${h}px`;
-      tattooImg.style.left = `${canvas.width * tattooX - w / 2}px`;
-      tattooImg.style.top = `${canvas.height * tattooY - h / 2}px`;
+
+      ctx.save();
+      ctx.translate(
+        overlayCanvas.width * tattooX,
+        overlayCanvas.height * tattooY
+      );
+      ctx.rotate(tattooAngle);
+      ctx.drawImage(currentTattoo, -w / 2, -h / 2, w, h);
+      ctx.restore();
     }
 
-    // === Attach tattoo to body part ===
+    // === Attach to body with angle & scale (like sock example) ===
     function attachTattooToBody(landmarks) {
-      if (!landmarks || !currentTattoo) return;
-      const point = landmarks[selectedBodyPart.idx];
-      if (point && point.visibility > 0.6) {
-        // Smooth movement
-        tattooX = 0.7 * tattooX + 0.3 * point.x;
-        tattooY = 0.7 * tattooY + 0.3 * point.y;
-        updateTattooPosition();
+      if (!landmarks || !currentTattoo || manualMode) return;
+
+      const part = selectedBodyPart;
+
+      if (part.type === "point") {
+        const pt = landmarks[part.idx];
+        if (pt && pt.visibility > 0.6) {
+          tattooX = 0.7 * tattooX + 0.3 * pt.x;
+          tattooY = 0.7 * tattooY + 0.3 * pt.y;
+          redrawTattoo();
+        }
+      } else if (part.type === "vector") {
+        const start = landmarks[part.idx];
+        const end = landmarks[part.end];
+        if (!start || !end || start.visibility < 0.5 || end.visibility < 0.5) return;
+
+        const mx = (start.x + end.x) / 2;
+        const my = (start.y + end.y) / 2;
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const angle = Math.atan2(dy, dx);
+        const dist = Math.hypot(dx, dy);
+        const newScale = Math.max(0.1, Math.min(0.8, dist * 2.5));
+
+        tattooX = 0.7 * tattooX + 0.3 * mx;
+        tattooY = 0.7 * tattooY + 0.3 * my;
+        tattooScale = 0.7 * tattooScale + 0.3 * newScale;
+        tattooAngle = 0.7 * tattooAngle + 0.3 * angle;
+        redrawTattoo();
       }
     }
 
@@ -240,29 +260,39 @@
         const url = URL.createObjectURL(file);
         loadTattooImage(url);
         document.querySelectorAll('.tattoo-thumb').forEach(t => t.classList.remove('selected'));
+        manualMode = true; // користувач завантажив — режим ручний
       }
     };
 
     // === Capture ===
     captureBtn.onclick = () => {
-      resizeCanvas();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const captureCanvas = document.createElement("canvas");
+      captureCanvas.width = overlayCanvas.width;
+      captureCanvas.height = overlayCanvas.height;
+      const cctx = captureCanvas.getContext("2d");
+
+      // Малюємо відео (фото з камери)
+      cctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+      // Малюємо тату
       if (currentTattoo) {
-        const w = canvas.width * tattooScale;
+        const w = captureCanvas.width * tattooScale;
         const h = (currentTattoo.height / currentTattoo.width) * w;
-        const x = canvas.width * tattooX - w / 2;
-        const y = canvas.height * tattooY - h / 2;
-        ctx.drawImage(currentTattoo, x, y, w, h);
+        cctx.save();
+        cctx.translate(captureCanvas.width * tattooX, captureCanvas.height * tattooY);
+        cctx.rotate(tattooAngle);
+        cctx.drawImage(currentTattoo, -w / 2, -h / 2, w, h);
+        cctx.restore();
       }
+
       const link = document.createElement("a");
       link.download = "tattoo-preview.png";
-      link.href = canvas.toDataURL("image/png");
+      link.href = captureCanvas.toDataURL("image/png");
       link.click();
     };
 
-    // === Touch gestures: drag & pinch ===
-    tattooImg.addEventListener("touchstart", (e) => {
+    // === Touch: drag & pinch ===
+    overlayCanvas.addEventListener("touchstart", (e) => {
+      if (!currentTattoo) return;
       e.preventDefault();
       const touches = e.touches;
       for (let i = 0; i < touches.length; i++) {
@@ -271,20 +301,26 @@
           y: touches[i].clientY
         };
       }
-
       if (touches.length === 1) {
-        const rect = tattooImg.getBoundingClientRect();
-        dragOffsetX = touches[0].clientX - rect.left;
-        dragOffsetY = touches[0].clientY - rect.top;
-        isDragging = true;
+        const rect = overlayCanvas.getBoundingClientRect();
+        const xOnCanvas = (touches[0].clientX - rect.left) / rect.width;
+        const yOnCanvas = (touches[0].clientY - rect.top) / rect.height;
+        // Перевіряємо, чи торкання всередині тату (грубо)
+        const dx = xOnCanvas - tattooX;
+        const dy = yOnCanvas - tattooY;
+        if (Math.hypot(dx, dy) < tattooScale) {
+          isDragging = true;
+          dragOffsetX = touches[0].clientX - overlayCanvas.width * tattooX;
+          dragOffsetY = touches[0].clientY - overlayCanvas.height * tattooY;
+          manualMode = true;
+        }
       }
     });
 
-    tattooImg.addEventListener("touchmove", (e) => {
+    overlayCanvas.addEventListener("touchmove", (e) => {
+      if (!currentTattoo) return;
       e.preventDefault();
       const touches = e.touches;
-
-      // Оновлюємо активні торкання
       for (let i = 0; i < touches.length; i++) {
         activeTouches[touches[i].identifier] = {
           x: touches[i].clientX,
@@ -293,36 +329,32 @@
       }
 
       if (touches.length === 1 && isDragging) {
-        const x = touches[0].clientX - dragOffsetX;
-        const y = touches[0].clientY - dragOffsetY;
-        tattooImg.style.left = `${x}px`;
-        tattooImg.style.top = `${y}px`;
-        tattooX = (x + tattooImg.offsetWidth / 2) / canvas.width;
-        tattooY = (y + tattooImg.offsetHeight / 2) / canvas.height;
+        tattooX = (touches[0].clientX - dragOffsetX) / overlayCanvas.width;
+        tattooY = (touches[0].clientY - dragOffsetY) / overlayCanvas.height;
+        redrawTattoo();
       } else if (touches.length === 2) {
-        // Pinch to scale
-        const t1 = activeTouches[touches[0].identifier];
-        const t2 = activeTouches[touches[1].identifier];
-        if (t1 && t2) {
+        const ids = Object.keys(activeTouches);
+        if (ids.length >= 2) {
+          const t1 = activeTouches[ids[0]];
+          const t2 = activeTouches[ids[1]];
           const dx = t1.x - t2.x;
           const dy = t1.y - t2.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
-          // Масштаб пропорційний відстані між пальцями (нормалізовано до ширини екрана)
-          const newScale = Math.max(0.1, Math.min(1.0, distance / (canvas.width * 0.8)));
+          const newScale = Math.max(0.1, Math.min(1.0, distance / (overlayCanvas.width * 0.8)));
           tattooScale = newScale;
-          updateTattooPosition();
+          manualMode = true;
+          redrawTattoo();
         }
       }
     });
 
-    tattooImg.addEventListener("touchend", (e) => {
-      e.preventDefault();
-      // Видаляємо зниклі торкання
+    overlayCanvas.addEventListener("touchend", (e) => {
+      if (!currentTattoo) return;
       for (let i = 0; i < e.changedTouches.length; i++) {
         delete activeTouches[e.changedTouches[i].identifier];
       }
-      if (e.touches.length < 2) {
-        isDragging = e.touches.length === 1;
+      if (e.touches.length === 0) {
+        isDragging = false;
       }
     });
 
