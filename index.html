@@ -174,7 +174,6 @@
       };
       img.onerror = () => {
         console.error("Failed to load tattoo:", src);
-        // Fallback - створимо просте зображення як запасний варіант
         createFallbackTattoo();
       };
       img.src = src;
@@ -186,7 +185,6 @@
       canvas.height = 200;
       const ctx = canvas.getContext('2d');
       
-      // Створюємо просте татуювання як запасний варіант
       ctx.fillStyle = 'white';
       ctx.beginPath();
       ctx.arc(100, 100, 80, 0, Math.PI * 2);
@@ -356,20 +354,21 @@
       }
     });
 
-    // Виправлені URL для MediaPipe
-    import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/+esm";
+    // НАЙНОВІША ВЕРСІЯ MEDIAPIPE
+    import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm";
 
     let poseLandmarker = null;
 
     async function initPose() {
       try {
         const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
         );
         
         poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
           baseOptions: {
-            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker/float16/latest/pose_landmarker.tflite"
+            // Актуальний шлях до моделі
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker/float16/latest/pose_landmarker.task"
           },
           runningMode: "VIDEO",
           numPoses: 1
